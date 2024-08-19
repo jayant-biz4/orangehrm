@@ -32,6 +32,7 @@ use OrangeHRM\ORM\ListSorter;
 use OrangeHRM\ORM\Paginator;
 use OrangeHRM\ORM\QueryBuilderWrapper;
 use OrangeHRM\Time\Dto\AttendanceReportSearchFilterParams;
+use OrangeHRM\Time\Dto\AttendanceDetailsReportSearchFilterParams;
 
 class AttendanceDao extends BaseDao
 {
@@ -340,6 +341,117 @@ class AttendanceDao extends BaseDao
         $q->groupBy('employee.empNumber');
         return $this->getPaginator($q);
     }
+
+
+   /**
+     * @param AttendanceDetailsReportSearchFilterParams $attendanceDetailsReportSearchFilterParams
+     * @return array
+     */
+    public function getAttendanceDetailsReportCriteriaList(AttendanceDetailsReportSearchFilterParams $attendanceDetailsReportSearchFilterParams): array
+    {
+        return $this->getAttendanceDetailsReportPaginator($attendanceDetailsReportSearchFilterParams)->getQuery()->execute();
+    }
+
+    /**
+     * @param AttendanceDetailsReportSearchFilterParams $attendanceDetailsReportSearchFilterParams
+     * @return int
+     */
+    public function getAttendanceDetailsReportCriteriaListCount(AttendanceDetailsReportSearchFilterParams $attendanceDetailsReportSearchFilterParams): int {
+        $paginator = $this->getAttendanceDetailsReportPaginator($attendanceDetailsReportSearchFilterParams);
+        return $paginator->count();
+    }
+
+    /**
+     * @param AttendanceDetailsReportSearchFilterParams $attendanceDetailsReportSearchFilterParams
+     * @return Paginator
+     */
+    private function getAttendanceDetailsReportPaginator(AttendanceDetailsReportSearchFilterParams $attendanceDetailsReportSearchFilterParams): Paginator
+    {
+        $q = $this->getAttendanceDetailsReportQueryBuilderWrapper($attendanceDetailsReportSearchFilterParams)->getQueryBuilder();
+        $q->select(
+            'CONCAT(employee.firstName, \' \', employee.lastName) AS fullName',
+            'employee.employeeId AS employeeId',
+            'IDENTITY(employee.employeeTerminationRecord) AS terminationId',
+            'employee.employeeId',
+            'attendanceRecord.punchInUserTime as punchInTime',
+            'attendanceRecord.punchOutUserTime as punchOutTime',
+            "TIME_DIFF(COALESCE(attendanceRecord.punchOutUtcTime, 0), COALESCE(attendanceRecord.punchInUtcTime, 0),'second') AS workHours"
+        );
+        $q->andWhere($q->expr()->isNull('employee.purgedAt'));
+        $q->groupBy('employee.empNumber, attendanceRecord.id');
+        $q->addOrderBy('employee.employeeId', ListSorter::ASCENDING);
+
+
+
+        return $this->getPaginator($q);
+    }
+
+
+    /**
+     * @param AttendanceReportSearchFilterParams $attendanceReportSearchFilterParams
+     * @return QueryBuilderWrapper
+     */
+    private function getAttendanceDetailsReportQueryBuilderWrapper(
+        AttendanceReportSearchFilterParams $attendanceReportSearchFilterParams
+    ): QueryBuilderWrapper {
+        $q = $this->createQueryBuilder(Employee::class, 'employee');
+        $q->leftJoin('employee.jobTitle', 'jobTitle');
+        $q->leftJoin('employee.subDivision', 'subunit');
+        $q->leftJoin('employee.empStatus', 'empStatus');
+
+        $this->setSortingAndPaginationParams($q, $attendanceReportSearchFilterParams);
+
+        if (is_null($attendanceReportSearchFilterParams->getFromDate()) && is_null($attendanceReportSearchFilterParams->getToDate())) {
+            // both from date and to date is null
+            $q->join('employee.attendanceRecords', 'attendanceRecord');
+        } elseif (!is_null($attendanceReportSearchFilterParams->getFromDate()) && is_null($attendanceReportSearchFilterParams->getToDate())) {
+            // from date is not null and to date is null
+            $q->join('employee.attendanceRecords', 'attendanceRecord', Expr\Join::WITH, $q->expr()->andX(
+                $q->expr()->gte('attendanceRecord.punchInUserTime', ':fromDate')
+            ));
+            $q->setParameter('fromDate', $attendanceReportSearchFilterParams->getFromDate());
+        } elseif (is_null($attendanceReportSearchFilterParams->getFromDate()) && !is_null($attendanceReportSearchFilterParams->getToDate())) {
+            // from date is null and to date is not null
+            $q->join('employee.attendanceRecords', 'attendanceRecord', Expr\Join::WITH, $q->expr()->andX(
+                $q->expr()->lte('attendanceRecord.punchOutUserTime', ':toDate')
+            ));
+            $q->setParameter('toDate', $attendanceReportSearchFilterParams->getToDate());
+        } elseif (!is_null($attendanceReportSearchFilterParams->getFromDate()) && !is_null($attendanceReportSearchFilterParams->getToDate())) {
+            // both from date and to date is not null
+            $q->join('employee.attendanceRecords', 'attendanceRecord', Expr\Join::WITH, $q->expr()->andX(
+                $q->expr()->gte('attendanceRecord.punchInUserTime', ':fromDate'),
+                $q->expr()->lte('attendanceRecord.punchOutUserTime', ':toDate')
+            ));
+            $q->setParameter('fromDate', $attendanceReportSearchFilterParams->getFromDate());
+            $q->setParameter('toDate', $attendanceReportSearchFilterParams->getToDate());
+        }
+
+        if (!is_null($attendanceReportSearchFilterParams->getEmployeeNumbers())) {
+            $q->andWhere($q->expr()->in('employee.empNumber', ':empNumbers'))
+                ->setParameter('empNumbers', $attendanceReportSearchFilterParams->getEmployeeNumbers());
+        }
+
+        if (!is_null($attendanceReportSearchFilterParams->getJobTitleId())) {
+            $q->andWhere('jobTitle.id = :jobTitleId')
+                ->setParameter('jobTitleId', $attendanceReportSearchFilterParams->getJobTitleId());
+        }
+
+        if (!is_null($attendanceReportSearchFilterParams->getSubunitId())) {
+            $q->andWhere($q->expr()->in('subunit.id', ':subunitIds'))
+                ->setParameter('subunitIds', $attendanceReportSearchFilterParams->getSubunitIdChain());
+        }
+
+        if (!is_null($attendanceReportSearchFilterParams->getEmploymentStatusId())) {
+            $q->andWhere('empStatus.id = :empStatusId')
+                ->setParameter('empStatusId', $attendanceReportSearchFilterParams->getEmploymentStatusId());
+        }
+
+        return $this->getQueryBuilderWrapper($q);
+    }
+
+
+
+
     /**
      * @param AttendanceReportSearchFilterParams $attendanceReportSearchFilterParams
      * @return QueryBuilderWrapper

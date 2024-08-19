@@ -21,6 +21,7 @@ import EditAttendance from './pages/EditAttendance.vue';
 import ViewMyAttendance from './pages/ViewMyAttendance.vue';
 import AttendanceConfiguration from './pages/AttendanceConfiguration.vue';
 import AttendanceSummaryReport from './pages/AttendanceSummaryReport.vue';
+import PunchInDetailsReport from './pages/PunchInDetailsReport.vue';
 import ViewEmployeeAttendanceSummary from './pages/ViewEmployeeAttendanceSummary.vue';
 import ViewEmployeeAttendanceDetailed from './pages/ViewEmployeeAttendanceDetailed.vue';
 
@@ -31,6 +32,7 @@ export default {
   'view-my-attendance': ViewMyAttendance,
   'attendance-configuration': AttendanceConfiguration,
   'attendance-summary-report': AttendanceSummaryReport,
+  'punchin-details-report': PunchInDetailsReport,
   'view-employee-attendance-summary': ViewEmployeeAttendanceSummary,
   'view-employee-attendance-detailed': ViewEmployeeAttendanceDetailed,
 };
