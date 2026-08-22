@@ -25,3 +25,12 @@ CLAUDE.local.md
 *.md
 .agents/
 .agents/**
+
+# track compiled frontend and classmap
+!web/dist/
+!src/vendor/composer/autoload_classmap.php
+!src/vendor/composer/autoload_static.php
+!src/vendor/composer/autoload_psr4.php
+!src/vendor/composer/autoload_namespaces.php
+!src/vendor/composer/autoload_files.php
+!src/vendor/composer/ClassLoader.php
