@@ -51,6 +51,13 @@ apiv2_attendance_employee_attendance_record_summary:
   defaults:
     _api: OrangeHRM\Attendance\Api\EmployeeAttendanceSummaryAPI
 
+apiv2_attendance_employee_attendance_details:
+  path: /api/v2/attendance/employees/details
+  controller: OrangeHRM\Core\Controller\Rest\V2\GenericRestController::handle
+  methods: [ GET ]
+  defaults:
+    _api: OrangeHRM\Attendance\Api\EmployeeAttendanceDetailsAPI
+
 apiv2_attendance_timezones:
  path: /api/v2/attendance/timezones
  controller: OrangeHRM\Core\Controller\Rest\V2\GenericRestController::handle
@@ -130,6 +137,11 @@ attendance_summary_report:
   controller: OrangeHRM\Attendance\Controller\AttendanceSummaryReportController::handle
   methods: [ GET ]  
 
+punchin_details_report:
+  path: /time/displayPunchInDetailsReportCriteria
+  controller: OrangeHRM\Attendance\Controller\PunchInDetailsReportController::handle
+  methods: [ GET ]
+
 attendance_employee_punch_in_out:
   path: /attendance/proxyPunchInPunchOut
   controller: OrangeHRM\Attendance\Controller\EmployeePunchInOutController::handle
@@ -139,3 +151,5 @@ attendance_employee_edit_attendance:
   path: /attendance/editEmployeeAttendanceRecord/{id}
   controller: OrangeHRM\Attendance\Controller\EditEmployeeAttendanceController::handle
   methods: [ GET ]
+
+
