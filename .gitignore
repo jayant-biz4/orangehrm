@@ -22,3 +22,6 @@ CLAUDE.local.md
 .aider*
 .gemini/
 .codex/
+*.md
+.agents/
+.agents/**
