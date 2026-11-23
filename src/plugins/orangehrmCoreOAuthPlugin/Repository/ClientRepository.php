@@ -26,6 +26,7 @@ use OrangeHRM\Authentication\Dto\UserCredentialInterface;
 use OrangeHRM\Core\Dao\BaseDao;
 use OrangeHRM\Core\Utility\PasswordHash;
 use OrangeHRM\Entity\OAuthClient;
+use OrangeHRM\Entity\User;
 use OrangeHRM\OAuth\Dto\Entity\ClientEntity;
 
 class ClientRepository extends BaseDao implements ClientRepositoryInterface
@@ -71,7 +72,47 @@ class ClientRepository extends BaseDao implements ClientRepositoryInterface
             return true;
         }
 
-        return $this->validateClientSecret($oauthClient, new UserCredential(null, $clientSecret));
+        if (!$this->validateClientSecret($oauthClient, new UserCredential(null, $clientSecret))) {
+            return false;
+        }
+
+        // Fork patch (client credentials grant): only for confidential clients linked to an active user
+        if ($grantType === 'client_credentials') {
+            return $oauthClient->isConfidential()
+                && $this->getClientCredentialsUserId($oauthClient->getId()) !== null;
+        }
+
+        return true;
+    }
+
+    /**
+     * Fork patch (client credentials grant)
+     *
+     * @param int $clientId `ohrm_oauth2_client.id`
+     * @return int|null the linked user id, or null if no user is linked or the linked user can't sign in
+     */
+    public function getClientCredentialsUserId(int $clientId): ?int
+    {
+        $oauthClient = $this->getRepository(OAuthClient::class)->findOneBy(['id' => $clientId, 'enabled' => true]);
+        if (!$oauthClient instanceof OAuthClient || $oauthClient->getClientCredentialsUserId() === null) {
+            return null;
+        }
+        $user = $this->getRepository(User::class)->find($oauthClient->getClientCredentialsUserId());
+        return $user instanceof User && self::isActiveUser($user) ? $user->getId() : null;
+    }
+
+    /**
+     * Same conditions a sign-in needs (see AuthenticationService::setCredentialsForUser)
+     *
+     * @param User $user
+     * @return bool
+     */
+    public static function isActiveUser(User $user): bool
+    {
+        return !$user->isDeleted()
+            && $user->getStatus()
+            && $user->getEmployee() !== null
+            && $user->getEmployee()->getEmployeeTerminationRecord() === null;
     }
 
     /**
@@ -81,7 +122,8 @@ class ClientRepository extends BaseDao implements ClientRepositoryInterface
      */
     private function validateClientSecret(OAuthClient $client, UserCredentialInterface $givenCred): bool
     {
-        if ($client->getClientSecret() === null) {
+        // Fork patch: a request without client_secret is refused, not a TypeError (500)
+        if ($client->getClientSecret() === null || $givenCred->getPassword() === null) {
             return false;
         }
         $passwordHasher = new PasswordHash();

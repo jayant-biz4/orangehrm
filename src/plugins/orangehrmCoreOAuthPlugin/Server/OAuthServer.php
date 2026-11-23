@@ -84,6 +84,8 @@ class OAuthServer
 
             $this->oauthServer->enableGrantType($grant, $this->accessTokenTTL);
             $this->oauthServer->enableGrantType($refreshTokenGrant, $this->accessTokenTTL);
+            // Fork patch: client credentials grant, refused unless the client is linked to a user
+            $this->oauthServer->enableGrantType(new ClientCredentialsGrant(), $this->accessTokenTTL);
         }
         return $this->oauthServer;
     }
