@@ -76,7 +76,11 @@ class OAuthSubscriber extends AbstractEventSubscriber
      */
     public function onRequestEvent(RequestEvent $event): void
     {
-        if (!$this->getAuthUser()->isAuthenticated() && $event->getRequest()->headers->has('authorization')) {
+        // Fork patch: only `Bearer` headers, so `Basic` client authentication reaches the token endpoint
+        if (
+            !$this->getAuthUser()->isAuthenticated()
+            && preg_match('/^\s*Bearer\s/i', (string)$event->getRequest()->headers->get('authorization')) === 1
+        ) {
             // Attempt to check OAuth token
 
             $tokenEncryptionKey = $this->getConfigService()->getOAuthTokenEncryptionKey();
@@ -95,7 +99,10 @@ class OAuthSubscriber extends AbstractEventSubscriber
                 $accessToken = $request->getAttribute(BearerTokenValidator::ATTRIBUTE_ACCESS_TOKEN);
                 $user = $this->getUserService()->geUserDao()->getSystemUser($accessToken->getUserId());
 
-                $this->getAuthenticationService()->setCredentialsForUser($user);
+                // Fork patch: refuse here when the token's user is deleted (disabled users throw)
+                if (!$this->getAuthenticationService()->setCredentialsForUser($user)) {
+                    throw OAuthServerException::accessDenied('The token user is no longer active');
+                }
                 $this->getAuthUser()->setIsAuthenticated(true);
             } catch (Throwable $e) {
                 $this->getLogger()->error($e->getMessage(), $e instanceof OAuthServerException ? [$e->getHint()] : []);
