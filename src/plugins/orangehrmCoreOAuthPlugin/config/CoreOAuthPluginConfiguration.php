@@ -25,6 +25,7 @@ use OrangeHRM\Framework\Http\Request;
 use OrangeHRM\Framework\PluginConfigurationInterface;
 use OrangeHRM\Framework\Services;
 use OrangeHRM\OAuth\Command\ClientCredentialsCommand;
+use OrangeHRM\OAuth\Command\ClientCredentialsSchemaCommand;
 use OrangeHRM\OAuth\Server\OAuthServer;
 use OrangeHRM\OAuth\Service\PsrHttpFactoryHelper;
 use OrangeHRM\OAuth\Subscriber\OAuthSubscriber;
@@ -54,5 +55,6 @@ class CoreOAuthPluginConfiguration implements PluginConfigurationInterface, Cons
     {
         // Fork patch (client credentials grant)
         $console->add(new ClientCredentialsCommand());
+        $console->add(new ClientCredentialsSchemaCommand());
     }
 }

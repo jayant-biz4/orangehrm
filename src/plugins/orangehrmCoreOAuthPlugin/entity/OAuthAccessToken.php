@@ -75,6 +75,15 @@ class OAuthAccessToken
     private bool $revoked = false;
 
     /**
+     * Fork patch (client credentials grant): issued by that grant, so re-checked against the client
+     *
+     * @var bool
+     *
+     * @ORM\Column(name="is_client_credentials", type="boolean", nullable=false, options={"default" : 0})
+     */
+    private bool $clientCredentials = false;
+
+    /**
      * @return int
      */
     public function getId(): int
@@ -171,5 +180,23 @@ class OAuthAccessToken
     public function setRevoked(bool $revoked): void
     {
         $this->revoked = $revoked;
+    }
+
+    /**
+     * Fork patch (client credentials grant)
+     *
+     * @return bool
+     */
+    public function isClientCredentials(): bool
+    {
+        return $this->clientCredentials;
+    }
+
+    /**
+     * @param bool $clientCredentials
+     */
+    public function setClientCredentials(bool $clientCredentials): void
+    {
+        $this->clientCredentials = $clientCredentials;
     }
 }

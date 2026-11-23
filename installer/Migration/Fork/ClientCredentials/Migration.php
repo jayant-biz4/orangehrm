@@ -19,8 +19,6 @@
 
 namespace OrangeHRM\Installer\Migration\Fork\ClientCredentials;
 
-use Doctrine\DBAL\Schema\ForeignKeyConstraint;
-use Doctrine\DBAL\Types\Types;
 use OrangeHRM\Installer\Util\V1\AbstractMigration;
 
 /**
@@ -28,7 +26,8 @@ use OrangeHRM\Installer\Util\V1\AbstractMigration;
  *
  * Runs as a second step of the 5.9.1 entry in AppSetupUtility::MIGRATIONS_MAP and reports
  * the upstream version, so `instance.version` stays an upstream value and later upstream
- * upgrades are detected as usual. Idempotent, so it is safe to run again by hand.
+ * upgrades are detected as usual. Idempotent piece by piece (see SchemaUpdate); to re-run it
+ * after a partial failure: `php bin/console orangehrm:oauth:client-credentials-schema`.
  */
 class Migration extends AbstractMigration
 {
@@ -37,25 +36,7 @@ class Migration extends AbstractMigration
      */
     public function up(): void
     {
-        if ($this->getSchemaHelper()->columnExists('ohrm_oauth2_client', 'client_credentials_user_id')) {
-            return;
-        }
-        $this->getSchemaHelper()->addColumn(
-            'ohrm_oauth2_client',
-            'client_credentials_user_id',
-            Types::INTEGER,
-            ['Notnull' => false, 'Default' => null]
-        );
-        $this->getSchemaHelper()->addForeignKey(
-            'ohrm_oauth2_client',
-            new ForeignKeyConstraint(
-                ['client_credentials_user_id'],
-                'ohrm_user',
-                ['id'],
-                'oauth2_client_client_credentials_user_id',
-                ['onDelete' => 'SET NULL']
-            )
-        );
+        (new SchemaUpdate($this->getConnection()))->apply();
     }
 
     /**
