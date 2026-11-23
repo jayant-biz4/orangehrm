@@ -51,13 +51,16 @@ These actions also revoke tokens, including their refresh tokens:
 1. **Back up the database.**
 2. **Put the schema in place before the new code is live**, or put the site in maintenance mode for
    steps 2 to 4. The new code maps the new columns, so with the code live and the schema not yet in
-   place, `/oauth2/token`, `/oauth2/authorize` (mobile sign-in) and the admin OAuth screen fail with
-   SQL errors. Put the schema in place in one of these ways:
+   place, `/oauth2/token`, `/oauth2/authorize` (mobile sign-in), the admin OAuth screen and every
+   bearer-token API call (the mobile app included) fail with SQL errors. Put the schema in place in
+   one of these ways:
    - Upgrading from 5.9 or earlier: run the upgrader. The fork step runs automatically, as the
      second step of `'5.9.1'`.
    - Instance already at 5.9.1, or the fork step failed after upstream's 5.9.1 step (the upgrader
      will not retry it, because `instance.version` is already 5.9.1):
-     `php bin/console orangehrm:oauth:client-credentials-schema`.
+     `php bin/console orangehrm:oauth:client-credentials-schema`. This command ships with the new
+     code, so on an instance already at 5.9.1 use maintenance mode: deploy the code, run the command,
+     clear the cache (step 4), then leave maintenance mode.
      It checks each piece separately: the column, its index, the foreign key and the token flag
      column. It is safe to run any number of times. It needs a database user that can ALTER.
 3. **Deploy the code.**
