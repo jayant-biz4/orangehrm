@@ -67,6 +67,27 @@ class AccessTokenRepository extends BaseDao implements AccessTokenRepositoryInte
     }
 
     /**
+     * Fork patch (client credentials grant)
+     *
+     * @param int $clientId `ohrm_oauth2_client.id`
+     * @param int $userId
+     * @return int number of revoked tokens
+     */
+    public function revokeAccessTokensForClientUser(int $clientId, int $userId): int
+    {
+        return $this->createQueryBuilder(OAuthAccessToken::class, 'accessToken')
+            ->update()
+            ->set('accessToken.revoked', ':revoked')
+            ->setParameter('revoked', true)
+            ->andWhere('accessToken.clientId = :clientId')
+            ->setParameter('clientId', $clientId)
+            ->andWhere('accessToken.userId = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->execute();
+    }
+
+    /**
      * @inheritdoc
      */
     public function isAccessTokenRevoked($tokenId): bool

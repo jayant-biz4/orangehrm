@@ -19,15 +19,18 @@
 
 use OrangeHRM\Core\Traits\EventDispatcherTrait;
 use OrangeHRM\Core\Traits\ServiceContainerTrait;
+use OrangeHRM\Framework\Console\Console;
+use OrangeHRM\Framework\Console\ConsoleConfigurationInterface;
 use OrangeHRM\Framework\Http\Request;
 use OrangeHRM\Framework\PluginConfigurationInterface;
 use OrangeHRM\Framework\Services;
+use OrangeHRM\OAuth\Command\ClientCredentialsCommand;
 use OrangeHRM\OAuth\Server\OAuthServer;
 use OrangeHRM\OAuth\Service\PsrHttpFactoryHelper;
 use OrangeHRM\OAuth\Subscriber\OAuthSubscriber;
 use OrangeHRM\OAuth\Service\OAuthService;
 
-class CoreOAuthPluginConfiguration implements PluginConfigurationInterface
+class CoreOAuthPluginConfiguration implements PluginConfigurationInterface, ConsoleConfigurationInterface
 {
     use ServiceContainerTrait;
     use EventDispatcherTrait;
@@ -42,5 +45,14 @@ class CoreOAuthPluginConfiguration implements PluginConfigurationInterface
         $this->getContainer()->register(Services::OAUTH_SERVICE, OAuthService::class);
 
         $this->getEventDispatcher()->addSubscriber(new OAuthSubscriber());
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function registerCommands(Console $console): void
+    {
+        // Fork patch (client credentials grant)
+        $console->add(new ClientCredentialsCommand());
     }
 }
