@@ -23,6 +23,7 @@ use DateInterval;
 use League\OAuth2\Server\Entities\ClientEntityInterface;
 use League\OAuth2\Server\Exception\OAuthServerException;
 use League\OAuth2\Server\Grant\ClientCredentialsGrant as BaseClientCredentialsGrant;
+use OrangeHRM\OAuth\Repository\AccessTokenRepository;
 use OrangeHRM\OAuth\Repository\ClientRepository;
 
 /**
@@ -30,6 +31,7 @@ use OrangeHRM\OAuth\Repository\ClientRepository;
  * to the user linked to the client (`ohrm_oauth2_client.client_credentials_user_id`), so the
  * existing per-user API permission checks apply. The client secret is checked by League
  * through ClientRepository::validateClient before this runs. No refresh token is issued.
+ * The token row is flagged `is_client_credentials`; see OAuthSubscriber.
  */
 class ClientCredentialsGrant extends BaseClientCredentialsGrant
 {
@@ -45,9 +47,12 @@ class ClientCredentialsGrant extends BaseClientCredentialsGrant
         $userId = $this->clientRepository instanceof ClientRepository
             ? $this->clientRepository->getClientCredentialsUserId($client->getIdentifier())
             : null;
-        if ($userId === null) {
+        if ($userId === null || !$this->accessTokenRepository instanceof AccessTokenRepository) {
             throw OAuthServerException::accessDenied();
         }
-        return parent::issueAccessToken($accessTokenTTL, $client, $userId, $scopes);
+        $accessToken = parent::issueAccessToken($accessTokenTTL, $client, $userId, $scopes);
+        // Marked so that OAuthSubscriber re-checks the client and the link on every request
+        $this->accessTokenRepository->markAsClientCredentials($accessToken->getIdentifier());
+        return $accessToken;
     }
 }

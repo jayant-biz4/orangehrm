@@ -35,6 +35,7 @@ use OrangeHRM\Framework\Http\Session\Session;
 use OrangeHRM\Framework\Services;
 use OrangeHRM\OAuth\Dto\CryptKey;
 use OrangeHRM\OAuth\Repository\AccessTokenRepository;
+use OrangeHRM\OAuth\Repository\ClientRepository;
 use OrangeHRM\OAuth\Server\BearerTokenValidator;
 use OrangeHRM\OAuth\Traits\PsrHttpFactoryHelperTrait;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -97,6 +98,15 @@ class OAuthSubscriber extends AbstractEventSubscriber
 
                 /** @var OAuthAccessToken $accessToken */
                 $accessToken = $request->getAttribute(BearerTokenValidator::ATTRIBUTE_ACCESS_TOKEN);
+                // Fork patch: a client credentials token is valid only while its client is enabled,
+                // confidential and still linked to the token's user (who must be able to sign in)
+                if (
+                    $accessToken->isClientCredentials()
+                    && (new ClientRepository())->getClientCredentialsUserId($accessToken->getClientId())
+                    !== $accessToken->getUserId()
+                ) {
+                    throw OAuthServerException::accessDenied('The client no longer allows this token');
+                }
                 $user = $this->getUserService()->geUserDao()->getSystemUser($accessToken->getUserId());
 
                 // Fork patch: refuse here when the token's user is deleted (disabled users throw)

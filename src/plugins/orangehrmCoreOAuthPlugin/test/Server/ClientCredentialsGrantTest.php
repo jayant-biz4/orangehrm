@@ -160,7 +160,7 @@ class ClientCredentialsGrantTest extends KernelTestCase
         $this->assertEquals(401, $status);
         $this->assertEquals('invalid_client', $body['error']);
         $this->assertArrayNotHasKey('access_token', $body);
-        $this->assertEquals(3, $this->getEntityManager()->getRepository(OAuthAccessToken::class)->count([])); // fixture tokens only
+        $this->assertEquals(4, $this->getEntityManager()->getRepository(OAuthAccessToken::class)->count([])); // fixture tokens only
     }
 
     public function refusedDataProvider(): array
@@ -262,6 +262,65 @@ class ClientCredentialsGrantTest extends KernelTestCase
         }
     }
 
+    private function sql(string $statement): void
+    {
+        $this->getEntityManager()->getConnection()->executeStatement($statement);
+    }
+
+    public function testIssuedTokenIsMarkedClientCredentials(): void
+    {
+        [, $body] = $this->clientCredentials('linked');
+        $this->assertTrue($this->getStoredToken($body['access_token'])->isClientCredentials());
+    }
+
+    /**
+     * @dataProvider changeAfterIssueDataProvider
+     */
+    public function testExistingTokenRefusedAfterClientOrLinkChange(array $statements): void
+    {
+        [, $body] = $this->clientCredentials('linked');
+        $this->authenticateWithBearer($body['access_token']);
+        $this->assertTrue(AuthUser::getInstance()->isAuthenticated());
+
+        foreach ($statements as $statement) {
+            $this->sql($statement);
+        }
+        try {
+            $this->authenticateWithBearer($body['access_token']);
+            $this->fail('token still accepted');
+        } catch (UnauthorizedException $e) {
+            $this->assertFalse(AuthUser::getInstance()->isAuthenticated());
+        }
+    }
+
+    public function changeAfterIssueDataProvider(): array
+    {
+        return [
+            'client disabled' => [['UPDATE ohrm_oauth2_client SET enabled = 0 WHERE id = 2']],
+            'link removed out of band' => [
+                ['UPDATE ohrm_oauth2_client SET client_credentials_user_id = NULL WHERE id = 2']
+            ],
+            'linked to another user' => [
+                ['UPDATE ohrm_oauth2_client SET client_credentials_user_id = 4 WHERE id = 2']
+            ],
+            'client switched to public' => [
+                ['UPDATE ohrm_oauth2_client SET is_confidential = 0, client_secret = NULL WHERE id = 2']
+            ],
+            'client deleted' => [['DELETE FROM ohrm_oauth2_client WHERE id = 2']],
+            'linked employee terminated' => [[
+                "INSERT INTO ohrm_emp_termination (id, reason_id, termination_date, emp_number) VALUES (2, 1, '2026-11-01', 1)",
+                'UPDATE hs_hr_employee SET termination_id = 2 WHERE emp_number = 1',
+            ]],
+        ];
+    }
+
+    public function testLowercaseBearerSchemeAccepted(): void
+    {
+        [, $body] = $this->clientCredentials('linked');
+        $this->authenticateWithBearer($body['access_token'], 'bearer');
+        $this->assertEquals(1, AuthUser::getInstance()->getUserId());
+    }
+
     public function testAuthCodeFlowUnchanged(): void
     {
         // The `unlinked` client can't use client credentials, but still does authorization code + refresh
@@ -287,6 +346,9 @@ class ClientCredentialsGrantTest extends KernelTestCase
         $this->assertEquals(200, $status);
         $this->assertArrayHasKey('refresh_token', $body);
         $this->assertEquals(1, $this->getStoredToken($body['access_token'])->getUserId());
+        $this->assertFalse($this->getStoredToken($body['access_token'])->isClientCredentials());
+        $this->authenticateWithBearer($body['access_token']); // not subject to the link checks
+        $this->assertEquals(1, AuthUser::getInstance()->getUserId());
 
         [$status, $refreshed] = $this->requestToken([
             'grant_type' => 'refresh_token',

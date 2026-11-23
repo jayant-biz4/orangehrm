@@ -89,12 +89,18 @@ class ClientRepository extends BaseDao implements ClientRepositoryInterface
      * Fork patch (client credentials grant)
      *
      * @param int $clientId `ohrm_oauth2_client.id`
-     * @return int|null the linked user id, or null if no user is linked or the linked user can't sign in
+     * @return int|null the linked user id; null if the client is missing, disabled or public, no user
+     *     is linked, or the linked user can't sign in
      */
     public function getClientCredentialsUserId(int $clientId): ?int
     {
         $oauthClient = $this->getRepository(OAuthClient::class)->findOneBy(['id' => $clientId, 'enabled' => true]);
-        if (!$oauthClient instanceof OAuthClient || $oauthClient->getClientCredentialsUserId() === null) {
+        if (
+            !$oauthClient instanceof OAuthClient
+            || !$oauthClient->isConfidential()
+            || $oauthClient->getClientSecret() === null
+            || $oauthClient->getClientCredentialsUserId() === null
+        ) {
             return null;
         }
         $user = $this->getRepository(User::class)->find($oauthClient->getClientCredentialsUserId());

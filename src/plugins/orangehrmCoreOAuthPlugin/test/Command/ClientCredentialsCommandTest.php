@@ -23,6 +23,7 @@ use OrangeHRM\Admin\Service\UserService;
 use OrangeHRM\Config\Config;
 use OrangeHRM\Entity\OAuthAccessToken;
 use OrangeHRM\Entity\OAuthClient;
+use OrangeHRM\Entity\OAuthRefreshToken;
 use OrangeHRM\Framework\Services;
 use OrangeHRM\OAuth\Command\ClientCredentialsCommand;
 use OrangeHRM\OAuth\Service\OAuthService;
@@ -84,13 +85,30 @@ class ClientCredentialsCommandTest extends KernelTestCase
         $this->assertEquals(1, $this->getLinkedUserId(2));
     }
 
-    public function testDisableRevokesTokensOfLinkedUser(): void
+    private function isRefreshRevoked(int $id): bool
+    {
+        return $this->getEntityManager()->find(OAuthRefreshToken::class, $id)->isRevoked();
+    }
+
+    public function testDisableRevokesAllTokensOfClient(): void
     {
         $tester = $this->runCommand(['client_id' => 'linked', '--disable' => true]);
         $this->assertEquals(Command::SUCCESS, $tester->getStatusCode());
         $this->assertNull($this->getLinkedUserId(2));
-        $this->assertTrue($this->isRevoked(1)); // token of hrbot issued by this client
-        $this->assertFalse($this->isRevoked(2)); // another user's token
+        $this->assertTrue($this->isRevoked(1));
+        $this->assertTrue($this->isRevoked(2));
+        $this->assertTrue($this->isRefreshRevoked(1));
+        $this->assertFalse($this->isRevoked(3)); // other client
+        $this->assertFalse($this->isRefreshRevoked(2)); // other client
+    }
+
+    public function testDisableRevokesTokensEvenWhenLinkAlreadyGone(): void
+    {
+        $tester = $this->runCommand(['client_id' => 'unlinked', '--disable' => true]);
+        $this->assertEquals(Command::SUCCESS, $tester->getStatusCode());
+        $this->assertTrue($this->isRevoked(4));
+        $this->assertTrue($this->isRefreshRevoked(2));
+        $this->assertFalse($this->isRevoked(1));
     }
 
     public function testRelinkRevokesTokensOfPreviousUser(): void

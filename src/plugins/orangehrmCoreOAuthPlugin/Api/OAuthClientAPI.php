@@ -38,6 +38,7 @@ use OrangeHRM\Core\Utility\PasswordHash;
 use OrangeHRM\Entity\OAuthClient;
 use OrangeHRM\OAuth\Api\Model\OAuthClientModel;
 use OrangeHRM\OAuth\Dto\OAuthClientSearchFilterParams;
+use OrangeHRM\OAuth\Repository\AccessTokenRepository;
 use OrangeHRM\OAuth\Traits\OAuthServiceTrait;
 
 class OAuthClientAPI extends Endpoint implements CrudEndpoint
@@ -346,7 +347,21 @@ class OAuthClientAPI extends Endpoint implements CrudEndpoint
             $oauthClient->setClientSecret(null);
         } // else `confidential` state not changed
 
+        // Fork patch (client credentials grant): a public client can't keep a link (switching it back
+        // to confidential must not quietly re-enable the grant), and disabling the client or changing
+        // its confidentiality (which replaces or drops the secret) ends the tokens it issued
+        if (!$oauthClient->isConfidential()) {
+            $oauthClient->setClientCredentialsUserId(null);
+        }
+
         $oauthClient = $this->getOAuthService()->getOAuthClientDao()->saveOAuthClient($oauthClient);
+
+        if (
+            ($currentOAuthClient->isEnabled() && !$oauthClient->isEnabled())
+            || $currentOAuthClient->isConfidential() !== $oauthClient->isConfidential()
+        ) {
+            (new AccessTokenRepository())->revokeTokensForClient($oauthClient->getId());
+        }
         return new EndpointResourceResult(
             OAuthClientModel::class,
             $oauthClient,

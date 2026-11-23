@@ -67,22 +67,41 @@ class AccessTokenRepository extends BaseDao implements AccessTokenRepositoryInte
     }
 
     /**
-     * Fork patch (client credentials grant)
+     * Fork patch (client credentials grant): revoke the client's access tokens and their refresh tokens
      *
      * @param int $clientId `ohrm_oauth2_client.id`
-     * @param int $userId
-     * @return int number of revoked tokens
+     * @param int|null $userId only this user's tokens; null = all tokens of the client
+     * @return int number of revoked access tokens
      */
-    public function revokeAccessTokensForClientUser(int $clientId, int $userId): int
+    public function revokeTokensForClient(int $clientId, ?int $userId = null): int
     {
-        return $this->createQueryBuilder(OAuthAccessToken::class, 'accessToken')
+        $userCondition = $userId === null ? '' : ' AND a.user_id = :userId';
+        $params = $userId === null ? ['clientId' => $clientId] : ['clientId' => $clientId, 'userId' => $userId];
+        $connection = $this->getEntityManager()->getConnection();
+        $connection->executeStatement(
+            'UPDATE ohrm_oauth2_refresh_token r JOIN ohrm_oauth2_access_token a ON a.access_token = r.access_token'
+            . ' SET r.revoked = 1 WHERE a.client_id = :clientId' . $userCondition,
+            $params
+        );
+        return $connection->executeStatement(
+            'UPDATE ohrm_oauth2_access_token a SET a.revoked = 1 WHERE a.client_id = :clientId' . $userCondition,
+            $params
+        );
+    }
+
+    /**
+     * Fork patch (client credentials grant)
+     *
+     * @param string $tokenId
+     */
+    public function markAsClientCredentials(string $tokenId): void
+    {
+        $this->createQueryBuilder(OAuthAccessToken::class, 'accessToken')
             ->update()
-            ->set('accessToken.revoked', ':revoked')
-            ->setParameter('revoked', true)
-            ->andWhere('accessToken.clientId = :clientId')
-            ->setParameter('clientId', $clientId)
-            ->andWhere('accessToken.userId = :userId')
-            ->setParameter('userId', $userId)
+            ->set('accessToken.clientCredentials', ':flag')
+            ->setParameter('flag', true)
+            ->andWhere('accessToken.accessToken = :accessToken')
+            ->setParameter('accessToken', $tokenId)
             ->getQuery()
             ->execute();
     }

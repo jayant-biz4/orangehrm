@@ -109,9 +109,12 @@ class ClientCredentialsCommand extends Command
         $client->setClientCredentialsUserId($newUserId);
         $clientDao->saveOAuthClient($client);
 
-        if ($currentUserId !== null && $currentUserId !== $newUserId) {
-            $revoked = (new AccessTokenRepository())
-                ->revokeAccessTokensForClientUser($client->getId(), $currentUserId);
+        if ($newUserId === null) {
+            // Every token of the client, even if the link was already cleared some other way
+            $revoked = (new AccessTokenRepository())->revokeTokensForClient($client->getId());
+            $this->getIO()->note("Revoked $revoked access token(s) of this client");
+        } elseif ($currentUserId !== null && $currentUserId !== $newUserId) {
+            $revoked = (new AccessTokenRepository())->revokeTokensForClient($client->getId(), $currentUserId);
             $this->getIO()->note("Revoked $revoked access token(s) issued by this client to the previous user");
         }
 

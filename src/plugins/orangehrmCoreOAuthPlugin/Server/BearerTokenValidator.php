@@ -55,7 +55,8 @@ class BearerTokenValidator implements AuthorizationValidatorInterface
         }
 
         $header = $request->getHeader('authorization');
-        $tokenId = trim((string)preg_replace('/^\s*Bearer\s/', '', $header[0]));
+        // Fork patch: scheme is case-insensitive (RFC 6750), as in OAuthSubscriber
+        $tokenId = trim((string)preg_replace('/^\s*Bearer\s/i', '', $header[0]));
 
         $tokenId = $this->decrypt($tokenId);
 
