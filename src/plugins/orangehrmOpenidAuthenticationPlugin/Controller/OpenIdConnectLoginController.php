@@ -90,7 +90,7 @@ class OpenIdConnectLoginController extends AbstractVueController implements Publ
         }
 
         //redirect to consent always
-        $authUrl = $oidcClient->getGeneratedAuthUrl() . '&prompt=consent';
+        $authUrl = $oidcClient->getGeneratedAuthUrl();
         return new RedirectResponse($authUrl);
     }
 }
