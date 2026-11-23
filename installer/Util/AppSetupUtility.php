@@ -77,7 +77,11 @@ class AppSetupUtility
         '5.8' => \OrangeHRM\Installer\Migration\V5_8_0\Migration::class,
         '5.8.1' => \OrangeHRM\Installer\Migration\V5_8_1\Migration::class,
         '5.9' => \OrangeHRM\Installer\Migration\V5_9_0\Migration::class,
-        '5.9.1' => \OrangeHRM\Installer\Migration\V5_9_1\Migration::class,
+        '5.9.1' => [
+            \OrangeHRM\Installer\Migration\V5_9_1\Migration::class,
+            // Fork patch, see docs/fork-client-credentials.md
+            \OrangeHRM\Installer\Migration\Fork\ClientCredentials\Migration::class,
+        ],
     ];
 
     public const INSTALLATION_DB_TYPE_NEW = 'new';

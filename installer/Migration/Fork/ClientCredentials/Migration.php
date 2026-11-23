@@ -1,0 +1,68 @@
+<?php
+
+/**
+ * OrangeHRM is a comprehensive Human Resource Management (HRM) System that captures
+ * all the essential functionalities required for any enterprise.
+ * Copyright (C) 2006 OrangeHRM Inc., http://www.orangehrm.com
+ *
+ * OrangeHRM is free software: you can redistribute it and/or modify it under the terms of
+ * the GNU General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * OrangeHRM is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with OrangeHRM.
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
+namespace OrangeHRM\Installer\Migration\Fork\ClientCredentials;
+
+use Doctrine\DBAL\Schema\ForeignKeyConstraint;
+use Doctrine\DBAL\Types\Types;
+use OrangeHRM\Installer\Util\V1\AbstractMigration;
+
+/**
+ * Fork patch (client credentials grant), not part of upstream OrangeHRM.
+ *
+ * Runs as a second step of the 5.9.1 entry in AppSetupUtility::MIGRATIONS_MAP and reports
+ * the upstream version, so `instance.version` stays an upstream value and later upstream
+ * upgrades are detected as usual. Idempotent, so it is safe to run again by hand.
+ */
+class Migration extends AbstractMigration
+{
+    /**
+     * @inheritDoc
+     */
+    public function up(): void
+    {
+        if ($this->getSchemaHelper()->columnExists('ohrm_oauth2_client', 'client_credentials_user_id')) {
+            return;
+        }
+        $this->getSchemaHelper()->addColumn(
+            'ohrm_oauth2_client',
+            'client_credentials_user_id',
+            Types::INTEGER,
+            ['Notnull' => false, 'Default' => null]
+        );
+        $this->getSchemaHelper()->addForeignKey(
+            'ohrm_oauth2_client',
+            new ForeignKeyConstraint(
+                ['client_credentials_user_id'],
+                'ohrm_user',
+                ['id'],
+                'oauth2_client_client_credentials_user_id',
+                ['onDelete' => 'SET NULL']
+            )
+        );
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getVersion(): string
+    {
+        return '5.9.1';
+    }
+}

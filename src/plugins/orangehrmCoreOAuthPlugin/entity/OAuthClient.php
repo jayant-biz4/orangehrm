@@ -79,6 +79,15 @@ class OAuthClient
     private bool $enabled = true;
 
     /**
+     * Fork patch (client credentials grant): the user this client acts as; null = grant refused
+     *
+     * @var int|null
+     *
+     * @ORM\Column(name="client_credentials_user_id", type="integer", nullable=true)
+     */
+    private ?int $clientCredentialsUserId = null;
+
+    /**
      * @return int
      */
     public function getId(): int
@@ -188,5 +197,21 @@ class OAuthClient
     public function setEnabled(bool $enabled): void
     {
         $this->enabled = $enabled;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getClientCredentialsUserId(): ?int
+    {
+        return $this->clientCredentialsUserId;
+    }
+
+    /**
+     * @param int|null $clientCredentialsUserId
+     */
+    public function setClientCredentialsUserId(?int $clientCredentialsUserId): void
+    {
+        $this->clientCredentialsUserId = $clientCredentialsUserId;
     }
 }
