@@ -34,3 +34,6 @@ CLAUDE.local.md
 !src/vendor/composer/autoload_namespaces.php
 !src/vendor/composer/autoload_files.php
 !src/vendor/composer/ClassLoader.php
+
+# Local backlog, not committed
+docs/backlog.md
