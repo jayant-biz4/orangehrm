@@ -25,6 +25,7 @@ use Exception;
 use OrangeHRM\Attendance\Exception\AttendanceServiceException;
 use OrangeHRM\Attendance\Traits\Service\AttendanceServiceTrait;
 use OrangeHRM\Core\Api\CommonParams;
+use OrangeHRM\Core\Api\V2\Exception\ForbiddenException;
 use OrangeHRM\Core\Api\V2\Validator\ParamRuleCollection;
 use OrangeHRM\Core\Traits\Auth\AuthUserTrait;
 use OrangeHRM\Core\Traits\Service\NumberHelperTrait;
@@ -35,6 +36,9 @@ class MyAttendanceRecordAPI extends EmployeeAttendanceRecordAPI
     use AttendanceServiceTrait;
     use AuthUserTrait;
     use NumberHelperTrait;
+
+    public const MOBILE_USER_AGENT_PATTERN =
+        '/Mobi|Android|iPhone|iPod|iPad|Windows Phone|Opera Mini|IEMobile|BlackBerry|webOS/i';
 
     /**
      * @inheritDoc
@@ -94,6 +98,7 @@ class MyAttendanceRecordAPI extends EmployeeAttendanceRecordAPI
      */
     protected function userAllowedPunchInActions(array $allowedActions): void
     {
+        $this->throwIfMobileBrowser();
         $allowed = in_array(
             WorkflowStateMachine::ATTENDANCE_ACTION_EDIT_PUNCH_TIME,
             $allowedActions
@@ -106,9 +111,22 @@ class MyAttendanceRecordAPI extends EmployeeAttendanceRecordAPI
      */
     protected function userAllowedPunchOutActions(array $allowedActions): void
     {
+        $this->throwIfMobileBrowser();
         $allowed = in_array(
             WorkflowStateMachine::ATTENDANCE_ACTION_EDIT_PUNCH_TIME,
             $allowedActions
         );
+    }
+
+    /**
+     * Fork patch: no punch in/out from phone or tablet browsers (by User-Agent, so best effort)
+     * @throws ForbiddenException
+     */
+    private function throwIfMobileBrowser(): void
+    {
+        $userAgent = (string)$this->getRequest()->getHttpRequest()->headers->get('User-Agent');
+        if (preg_match(self::MOBILE_USER_AGENT_PATTERN, $userAgent) === 1) {
+            throw $this->getForbiddenException('Punch in/out is not allowed from mobile devices');
+        }
     }
 }
