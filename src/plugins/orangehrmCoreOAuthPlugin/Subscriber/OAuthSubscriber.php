@@ -37,7 +37,9 @@ use OrangeHRM\OAuth\Dto\CryptKey;
 use OrangeHRM\OAuth\Repository\AccessTokenRepository;
 use OrangeHRM\OAuth\Repository\ClientRepository;
 use OrangeHRM\OAuth\Server\BearerTokenValidator;
+use OrangeHRM\OAuth\Traits\OAuthServiceTrait;
 use OrangeHRM\OAuth\Traits\PsrHttpFactoryHelperTrait;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -50,6 +52,7 @@ class OAuthSubscriber extends AbstractEventSubscriber
     use UserServiceTrait;
     use ConfigServiceTrait;
     use LoggerTrait;
+    use OAuthServiceTrait;
 
     private AuthenticationService $authenticationService;
 
@@ -107,6 +110,11 @@ class OAuthSubscriber extends AbstractEventSubscriber
                 ) {
                     throw OAuthServerException::accessDenied('The client no longer allows this token');
                 }
+                // Fork patch: the mobile app may not punch in/out
+                if ($this->isMobilePunchRequest($event->getRequest(), $accessToken->getClientId())) {
+                    $event->setResponse($this->getForbiddenResponse('Punch in/out is not allowed from the mobile app'));
+                    return;
+                }
                 $user = $this->getUserService()->geUserDao()->getSystemUser($accessToken->getUserId());
 
                 // Fork patch: refuse here when the token's user is deleted (disabled users throw)
@@ -119,6 +127,32 @@ class OAuthSubscriber extends AbstractEventSubscriber
                 $this->handleException($event, $e);
             }
         }
+    }
+
+    /**
+     * Fork patch: own punch in (POST) / punch out (PUT) with a mobile app token
+     */
+    private function isMobilePunchRequest(Request $request, int $clientId): bool
+    {
+        return in_array($request->getMethod(), [Request::METHOD_POST, Request::METHOD_PUT], true)
+            && rtrim($request->getPathInfo(), '/') === '/api/v2/attendance/records'
+            && $clientId === $this->getOAuthService()->getMobileClientId();
+    }
+
+    private function getForbiddenResponse(string $message): Response
+    {
+        $response = new Response();
+        $response->setContent(
+            \OrangeHRM\Core\Api\V2\Response::formatError(
+                ['error' => ['status' => Response::HTTP_FORBIDDEN, 'message' => $message]]
+            )
+        );
+        $response->setStatusCode(Response::HTTP_FORBIDDEN);
+        $response->headers->set(
+            \OrangeHRM\Core\Api\V2\Response::CONTENT_TYPE_KEY,
+            \OrangeHRM\Core\Api\V2\Response::CONTENT_TYPE_JSON
+        );
+        return $response;
     }
 
     /**
