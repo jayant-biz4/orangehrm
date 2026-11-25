@@ -88,7 +88,7 @@ For everything else, go to the skill that owns it — it is the source of truth:
 
 Project-wide conventions no single skill owns:
 
-- **Branch and commit naming.** Every branch and commit starts with a JIRA ticket key: e.g. branch `OHRM5X-1234`, commit `OHRM5X-1234: Add employee export endpoint`. Visible throughout `git log`. PRs are squash-merged by reviewers.
+- **Branch and commit naming.** This fork uses Conventional Commits: branch `<type>/<short-name>` (e.g. `fix/block-mobile-punch`), commit `<type>(<scope>): <summary>` (e.g. `fix(attendance): block punch in/out from mobile browsers`). Types in use: `feat`, `fix`, `docs`, `build`, `chore`. No JIRA key is needed. (Upstream `orangehrm/orangehrm` uses JIRA-prefixed names like `OHRM5X-1234: …` — follow that only when contributing upstream.) PRs are squash-merged by reviewers.
 - **License header.** Every PHP and `.vue` source file starts with the GPL header block from existing files. PHP-CS-Fixer doesn't check it but reviewers do.
 - **PHP style.** PSR-12 + the project's `.php-cs-fixer.dist.php` (short array syntax, no unused imports, etc.). Always run `php-cs-fix` before committing; CI hard-fails if it touches any file.
 

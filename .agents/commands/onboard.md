@@ -141,7 +141,7 @@ Now that the environment runs, get them ready to commit. Explain: OrangeHRM comm
 ## Step 13 — Contribution workflow primer
 
 Summarize the team conventions (the authoritative list is in `AGENTS.md` → "Conventions to follow"):
-- **JIRA-ticket-prefixed branches and commits** — branch `OHRM5X-NNNN`, commit `OHRM5X-NNNN: <short imperative>`.
+- **Conventional Commits** — branch `<type>/<short-name>`, commit `<type>(<scope>): <summary>` (e.g. `fix(attendance): …`). No JIRA key needed in this fork; upstream contributions use `OHRM5X-NNNN: <short imperative>`.
 - Branch off the active target branch (e.g. `5.x` / `main`).
 - OSS contributors: fork `orangehrm/orangehrm`, push to the fork, PR against upstream's versioned branch. Employees with org push access can skip the fork.
 - PRs are squash-merged by reviewers.
