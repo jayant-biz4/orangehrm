@@ -1,0 +1,23 @@
+Config:
+  - { name: 'leave.work_schedule_implementation', value: 'BasicWorkSchedule' }
+  - { name: 'admin.default_workshift_end_time', value: '17:00' }
+  - { name: 'admin.default_workshift_start_time', value: '09:00' }
+
+WorkWeek:
+  - { id: 1, mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 4, sun: 8 }
+
+Country:
+  - {cou_code: 'LK', name: 'SRI LANKA', cou_name: 'Sri Lanka', iso3: 'LKA', numcode: 144 }
+
+Location:
+  - {id: 1, name: 'Colombo', country_code: 'LK'}
+
+Employee:
+  - {empNumber: 1, firstName: 'Kayla', lastName: 'Abbey'}
+  - {empNumber: 2, firstName: 'Ashley', lastName: 'Abel'}
+
+EmpLocations:
+  - {emp_number: 1, location_id: 1}
+
+Holiday:
+  - {id: 1, recurring: 0, name: 'Colombo Day', date: '2021-08-20', length: 0, location_id: 1}

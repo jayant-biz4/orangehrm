@@ -118,7 +118,7 @@ class BasicWorkSchedule implements WorkScheduleInterface
      */
     public function isHalfDay(DateTime $day): bool
     {
-        return $this->getHolidayService()->isHalfDay($day);
+        return $this->getHolidayService()->isHalfDay($day, $this->getEmpNumber());
     }
 
     /**
@@ -126,7 +126,7 @@ class BasicWorkSchedule implements WorkScheduleInterface
      */
     public function isHoliday(DateTime $day): bool
     {
-        return $this->getHolidayService()->isHoliday($day);
+        return $this->getHolidayService()->isHoliday($day, $this->getEmpNumber());
     }
 
     /**
@@ -134,6 +134,6 @@ class BasicWorkSchedule implements WorkScheduleInterface
      */
     public function isHalfDayHoliday(DateTime $day): bool
     {
-        return $this->getHolidayService()->isHalfDayHoliday($day);
+        return $this->getHolidayService()->isHalfDayHoliday($day, $this->getEmpNumber());
     }
 }

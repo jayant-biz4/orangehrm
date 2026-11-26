@@ -24,6 +24,7 @@ use OrangeHRM\Admin\Dto\WorkShiftStartAndEndTime;
 use OrangeHRM\Admin\Service\WorkShiftService;
 use OrangeHRM\Entity\EmployeeWorkShift;
 use OrangeHRM\Entity\WorkShift;
+use OrangeHRM\Leave\Service\HolidayService;
 use OrangeHRM\Leave\WorkSchedule\BasicWorkSchedule;
 use OrangeHRM\Pim\Dao\EmployeeDao;
 use OrangeHRM\Pim\Service\EmployeeService;
@@ -158,5 +159,35 @@ class BasicWorkScheduleTest extends TestCase
         $basicWorkSchedule->setEmpNumber(1);
 
         $this->assertEquals(5.75, $basicWorkSchedule->getWorkShiftLength());
+    }
+
+    /**
+     * @dataProvider holidayMethodsDataProvider
+     */
+    public function testHolidayMethodsPassEmpNumber(string $method): void
+    {
+        $day = new DateTime('2021-08-20');
+        $holidayService = $this->getMockBuilder(HolidayService::class)
+            ->onlyMethods([$method])
+            ->getMock();
+        $holidayService->expects($this->once())
+            ->method($method)
+            ->with($day, 5)
+            ->willReturn(true);
+
+        $basicWorkSchedule = $this->getMockBuilder(BasicWorkSchedule::class)
+            ->onlyMethods(['getHolidayService'])
+            ->getMock();
+        $basicWorkSchedule->expects($this->once())
+            ->method('getHolidayService')
+            ->willReturn($holidayService);
+        $basicWorkSchedule->setEmpNumber(5);
+
+        $this->assertTrue($basicWorkSchedule->$method($day));
+    }
+
+    public function holidayMethodsDataProvider(): array
+    {
+        return [['isHoliday'], ['isHalfDay'], ['isHalfDayHoliday']];
     }
 }

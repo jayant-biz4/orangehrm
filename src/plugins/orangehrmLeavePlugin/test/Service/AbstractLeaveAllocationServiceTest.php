@@ -21,10 +21,21 @@ namespace OrangeHRM\Tests\Leave\Service;
 
 use DateTime;
 use Generator;
+use OrangeHRM\Config\Config;
+use OrangeHRM\Core\Service\ConfigService;
 use OrangeHRM\Core\Service\DateTimeHelperService;
+use OrangeHRM\Entity\Leave;
+use OrangeHRM\Framework\Cache\FilesystemAdapter;
 use OrangeHRM\Framework\Services;
+use OrangeHRM\Leave\Dto\LeaveParameterObject;
 use OrangeHRM\Leave\Service\AbstractLeaveAllocationService;
+use OrangeHRM\Leave\Service\HolidayService;
+use OrangeHRM\Leave\Service\WorkScheduleService;
+use OrangeHRM\Leave\Service\WorkWeekService;
+use OrangeHRM\Leave\WorkSchedule\BasicWorkSchedule;
+use OrangeHRM\Pim\Service\EmployeeService;
 use OrangeHRM\Tests\Util\KernelTestCase;
+use OrangeHRM\Tests\Util\TestDataService;
 
 /**
  * @group Leave
@@ -107,5 +118,72 @@ class AbstractLeaveAllocationServiceTest extends KernelTestCase
         yield [new DateTime('09:00'), new DateTime('09:15'), 0.25];
         // TODO:: decimal points also need to handle
         //yield [new DateTime('09:00'), new DateTime('09:10'), 0.16];
+    }
+
+    public function testLeaveLengthDiffersByLocation(): void
+    {
+        TestDataService::populate(
+            Config::get(Config::PLUGINS_DIR) . '/orangehrmLeavePlugin/test/fixtures/LeaveAllocationLocation.yml'
+        );
+        $cache = new FilesystemAdapter();
+        $cache->clear();
+        $workScheduleService = $this->getMockBuilder(WorkScheduleService::class)
+            ->onlyMethods(['getWorkSchedule'])
+            ->getMock();
+        $workScheduleService->method('getWorkSchedule')->willReturnCallback(
+            function (int $empNumber) {
+                $workSchedule = new BasicWorkSchedule();
+                $workSchedule->setEmpNumber($empNumber);
+                return $workSchedule;
+            }
+        );
+        $this->createKernelWithMockServices([
+            Services::CACHE => $cache,
+            Services::EMPLOYEE_SERVICE => new EmployeeService(),
+            Services::HOLIDAY_SERVICE => new HolidayService(),
+            Services::WORK_WEEK_SERVICE => new WorkWeekService(),
+            Services::CONFIG_SERVICE => new ConfigService(),
+            Services::DATETIME_HELPER_SERVICE => new DateTimeHelperService(),
+            Services::WORK_SCHEDULE_SERVICE => $workScheduleService,
+        ]);
+
+        $leaveAllocationService = new class () extends AbstractLeaveAllocationService {
+            protected function saveLeaveRequest(LeaveParameterObject $leaveAssignmentData)
+            {
+            }
+
+            protected function getLeaveRequestStatus(
+                bool $isWeekend,
+                bool $isHoliday,
+                DateTime $leaveDate,
+                LeaveParameterObject $leaveAssignmentData
+            ): int {
+                return $isHoliday ? Leave::LEAVE_STATUS_LEAVE_HOLIDAY : Leave::LEAVE_STATUS_LEAVE_APPROVED;
+            }
+
+            protected function allowToExceedLeaveBalance(): bool
+            {
+                return true;
+            }
+        };
+
+        $from = new DateTime('2021-08-19');
+        $to = new DateTime('2021-08-20');
+
+        $emp1Leaves = $leaveAllocationService->createLeaveObjectListForAppliedRange(
+            new LeaveParameterObject(1, 1, $from, $to)
+        );
+        $this->assertEquals(Leave::LEAVE_STATUS_LEAVE_APPROVED, $emp1Leaves[0]->getStatus());
+        $this->assertEquals(1, $emp1Leaves[0]->getLengthDays());
+        $this->assertEquals(Leave::LEAVE_STATUS_LEAVE_HOLIDAY, $emp1Leaves[1]->getStatus());
+        $this->assertEquals(0, $emp1Leaves[1]->getLengthDays());
+
+        $emp2Leaves = $leaveAllocationService->createLeaveObjectListForAppliedRange(
+            new LeaveParameterObject(2, 1, $from, $to)
+        );
+        foreach ($emp2Leaves as $leave) {
+            $this->assertEquals(Leave::LEAVE_STATUS_LEAVE_APPROVED, $leave->getStatus());
+            $this->assertEquals(1, $leave->getLengthDays());
+        }
     }
 }
