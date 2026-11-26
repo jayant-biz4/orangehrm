@@ -198,4 +198,17 @@ class LocationServiceTest extends KernelTestCase
         $this->assertNull($em->getRepository(Holiday::class)->find($holidayId));
         $this->assertFalse($cache->getItem(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX . '.test')->isHit());
     }
+
+    public function testSaveLocationClearsHolidayCache(): void
+    {
+        $cache = new FilesystemAdapter();
+        $cache->get(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX . '.test', fn () => 'stale');
+        $this->createKernelWithMockServices([Services::CACHE => $cache]);
+
+        $location = $this->locationService->getLocationById(1);
+        $location->setName('Renamed');
+        $this->locationService->saveLocation($location);
+
+        $this->assertFalse($cache->getItem(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX . '.test')->isHit());
+    }
 }

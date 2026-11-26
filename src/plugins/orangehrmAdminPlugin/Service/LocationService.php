@@ -151,7 +151,10 @@ class LocationService
      */
     public function saveLocation(Location $location): Location
     {
-        return $this->getLocationDao()->saveLocation($location);
+        $location = $this->getLocationDao()->saveLocation($location);
+        // Cached holiday lists embed the location name
+        $this->getCache()->clear(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX);
+        return $location;
     }
 
     /**
