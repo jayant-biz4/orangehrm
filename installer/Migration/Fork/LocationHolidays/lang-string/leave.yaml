@@ -1,0 +1,10 @@
+langStrings:
+  -
+    value: 'All Locations'
+    unitId: all_locations
+  -
+    value: 'A holiday already exists on this date for this location or for all locations'
+    unitId: holiday_date_clash
+  -
+    value: 'Every other location already has a holiday on this date. Add it as an all-locations holiday instead'
+    unitId: holiday_all_locations

@@ -81,6 +81,8 @@ class AppSetupUtility
             \OrangeHRM\Installer\Migration\V5_9_1\Migration::class,
             // Fork patch, see docs/fork-client-credentials.md
             \OrangeHRM\Installer\Migration\Fork\ClientCredentials\Migration::class,
+            // Fork patch, see docs/fork-location-holidays.md
+            \OrangeHRM\Installer\Migration\Fork\LocationHolidays\Migration::class,
         ],
     ];
 

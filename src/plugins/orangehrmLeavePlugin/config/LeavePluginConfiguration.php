@@ -19,9 +19,12 @@
 
 use OrangeHRM\Core\Traits\EventDispatcherTrait;
 use OrangeHRM\Core\Traits\ServiceContainerTrait;
+use OrangeHRM\Framework\Console\Console;
+use OrangeHRM\Framework\Console\ConsoleConfigurationInterface;
 use OrangeHRM\Framework\Http\Request;
 use OrangeHRM\Framework\PluginConfigurationInterface;
 use OrangeHRM\Framework\Services;
+use OrangeHRM\Leave\Command\LocationHolidaysSchemaCommand;
 use OrangeHRM\Leave\Service\HolidayService;
 use OrangeHRM\Leave\Service\LeaveConfigurationService;
 use OrangeHRM\Leave\Service\LeaveEntitlementService;
@@ -32,7 +35,7 @@ use OrangeHRM\Leave\Service\WorkScheduleService;
 use OrangeHRM\Leave\Service\WorkWeekService;
 use OrangeHRM\Leave\Subscriber\LeaveEventSubscriber;
 
-class LeavePluginConfiguration implements PluginConfigurationInterface
+class LeavePluginConfiguration implements PluginConfigurationInterface, ConsoleConfigurationInterface
 {
     use ServiceContainerTrait;
     use EventDispatcherTrait;
@@ -76,5 +79,14 @@ class LeavePluginConfiguration implements PluginConfigurationInterface
         );
 
         $this->getEventDispatcher()->addSubscriber(new LeaveEventSubscriber());
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function registerCommands(Console $console): void
+    {
+        // Fork patch (location-based holidays)
+        $console->add(new LocationHolidaysSchemaCommand());
     }
 }

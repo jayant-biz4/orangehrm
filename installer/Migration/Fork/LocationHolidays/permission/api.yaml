@@ -1,0 +1,11 @@
+apiv2_leave_holiday_date_validation:
+  description: 'API-v2 Leave - Holiday Date Validation'
+  api: OrangeHRM\Leave\Api\HolidayDateValidationAPI
+  module: leave
+  allowed:
+    read: true
+    create: false
+    update: false
+    delete: false
+  permissions:
+    - { role: Admin, permission: { read: true, create: false, update: false, delete: false } }

@@ -1,0 +1,99 @@
+<?php
+
+/**
+ * OrangeHRM is a comprehensive Human Resource Management (HRM) System that captures
+ * all the essential functionalities required for any enterprise.
+ * Copyright (C) 2006 OrangeHRM Inc., http://www.orangehrm.com
+ *
+ * OrangeHRM is free software: you can redistribute it and/or modify it under the terms of
+ * the GNU General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * OrangeHRM is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with OrangeHRM.
+ * If not, see <https://www.gnu.org/licenses/>.
+ */
+
+namespace OrangeHRM\Installer\Migration\Fork\LocationHolidays;
+
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Schema\ForeignKeyConstraint;
+use Doctrine\DBAL\Schema\Index;
+use Doctrine\DBAL\Types\Types;
+use OrangeHRM\Installer\Util\V1\DataGroupHelper;
+use OrangeHRM\Installer\Util\V1\LangStringHelper;
+use OrangeHRM\Installer\Util\V1\SchemaHelper;
+
+/**
+ * Fork patch (location-based holidays): schema, lang string and API permission changes, each
+ * piece checked on its own, so it is safe to run again after a partial failure (MySQL DDL is not
+ * transactional). Used by the installer migration and by
+ * `bin/console orangehrm:leave:location-holidays-schema`. See docs/fork-location-holidays.md
+ */
+class SchemaUpdate
+{
+    public const TABLE = 'ohrm_holiday';
+    public const COLUMN = 'location_id';
+    public const INDEX = 'holiday_location_id_date';
+    public const FOREIGN_KEY = 'holiday_location_id';
+    public const DATA_GROUP = 'apiv2_leave_holiday_date_validation';
+
+    private Connection $connection;
+    private SchemaHelper $schemaHelper;
+
+    public function __construct(Connection $connection)
+    {
+        $this->connection = $connection;
+        $this->schemaHelper = new SchemaHelper($connection);
+    }
+
+    public function apply(): void
+    {
+        if (!$this->schemaHelper->columnExists(self::TABLE, self::COLUMN)) {
+            $this->schemaHelper->addColumn(
+                self::TABLE,
+                self::COLUMN,
+                Types::INTEGER,
+                ['Notnull' => false, 'Default' => null]
+            );
+        }
+
+        $table = $this->connection->createSchemaManager()->introspectTable(self::TABLE);
+        if (!$table->hasIndex(self::INDEX)) {
+            $this->connection->createSchemaManager()->createIndex(
+                new Index(self::INDEX, [self::COLUMN, 'date']),
+                self::TABLE
+            );
+        }
+
+        if (!$table->hasForeignKey(self::FOREIGN_KEY)) {
+            $this->schemaHelper->addForeignKey(
+                self::TABLE,
+                new ForeignKeyConstraint(
+                    [self::COLUMN],
+                    'ohrm_location',
+                    ['id'],
+                    self::FOREIGN_KEY,
+                    ['onDelete' => 'CASCADE']
+                )
+            );
+        }
+
+        (new LangStringHelper($this->connection))->insertOrUpdateLangStrings(__DIR__, 'leave');
+
+        // DataGroupHelper::insertApiPermissions is not idempotent
+        $exists = $this->connection->createQueryBuilder()
+            ->select('dataGroup.id')
+            ->from('ohrm_data_group', 'dataGroup')
+            ->where('dataGroup.name = :name')
+            ->setParameter('name', self::DATA_GROUP)
+            ->executeQuery()
+            ->fetchOne();
+        if ($exists === false) {
+            (new DataGroupHelper($this->connection))->insertApiPermissions(__DIR__ . '/permission/api.yaml');
+        }
+    }
+}
