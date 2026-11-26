@@ -33,4 +33,11 @@ describe('core/util/helper/holidayQuery', () => {
       empNumber: 7,
     });
   });
+
+  test('no employee filter when allHolidays', () => {
+    expect(buildHolidayQuery('2026-01-01', '2026-12-31', 7, true)).toEqual({
+      fromDate: '2026-01-01',
+      toDate: '2026-12-31',
+    });
+  });
 });

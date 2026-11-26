@@ -19,6 +19,7 @@
 
 namespace OrangeHRM\Leave\Controller;
 
+use OrangeHRM\Admin\Service\LocationService;
 use OrangeHRM\Core\Controller\AbstractVueController;
 use OrangeHRM\Core\Vue\Component;
 use OrangeHRM\Core\Vue\Prop;
@@ -35,6 +36,19 @@ class SaveHolidayController extends AbstractVueController
         ['id' => Holiday::HOLIDAY_FULL_DAY_LENGTH, 'label' => Holiday::HOLIDAY_FULL_DAY_LENGTH_NAME],
     ];
 
+    protected ?LocationService $locationService = null;
+
+    /**
+     * @return LocationService
+     */
+    protected function getLocationService(): LocationService
+    {
+        if (!$this->locationService instanceof LocationService) {
+            $this->locationService = new LocationService();
+        }
+        return $this->locationService;
+    }
+
     public function preRender(Request $request): void
     {
         if ($request->attributes->has('id')) {
@@ -44,6 +58,8 @@ class SaveHolidayController extends AbstractVueController
             $component = new Component('holiday-save');
         }
         $component->addProp(new Prop('holiday-length-list', Prop::TYPE_ARRAY, self::HOLIDAY_LENGTH_LIST));
+        $locations = $this->getLocationService()->getAccessibleLocationsArray();
+        $component->addProp(new Prop('locations', Prop::TYPE_ARRAY, $locations));
         $this->setComponent($component);
     }
 }

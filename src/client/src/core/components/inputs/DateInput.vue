@@ -49,6 +49,10 @@ export default {
       type: Number,
       default: null,
     },
+    allHolidays: {
+      type: Boolean,
+      default: false,
+    },
   },
   setup(props) {
     const state = reactive({
@@ -96,7 +100,12 @@ export default {
         .request({
           method: 'GET',
           url: '/api/v2/leave/holidays',
-          params: buildHolidayQuery(fromDate, toDate, props.empNumber),
+          params: buildHolidayQuery(
+            fromDate,
+            toDate,
+            props.empNumber,
+            props.allHolidays,
+          ),
           validateStatus: responseValidator,
         })
         .then(({data}) => {

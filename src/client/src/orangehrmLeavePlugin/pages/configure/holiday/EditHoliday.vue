@@ -43,6 +43,7 @@
                 :label="$t('general.date')"
                 :rules="rules.date"
                 :years="yearArray"
+                all-holidays
                 required
               />
             </oxd-grid-item>
@@ -54,6 +55,14 @@
                 :options="holidayLengthList"
                 :rules="rules.length"
                 required
+              />
+            </oxd-grid-item>
+            <oxd-grid-item>
+              <oxd-input-field
+                v-model="holiday.location"
+                type="select"
+                :label="$t('general.location')"
+                :options="locationOptions"
               />
             </oxd-grid-item>
           </oxd-grid>
@@ -107,6 +116,7 @@ import {
   shouldNotExceedCharLength,
   validDateFormat,
 } from '@ohrm/core/util/validation/rules';
+import {promiseDebounce} from '@ohrm/oxd';
 import {yearRange} from '@/core/util/helper/year-range';
 import useDateFormat from '@/core/util/composable/useDateFormat';
 
@@ -115,6 +125,7 @@ const holidayModel = {
   name: '',
   date: '',
   recurring: false,
+  location: null,
   length: 0,
 };
 
@@ -127,6 +138,10 @@ export default {
     holidayLengthList: {
       type: Array,
       required: true,
+    },
+    locations: {
+      type: Array,
+      default: () => [],
     },
   },
 
@@ -150,10 +165,32 @@ export default {
       holiday: {...holidayModel},
       rules: {
         name: [required, shouldNotExceedCharLength(200)],
-        date: [required, validDateFormat(this.userDateFormat)],
+        date: [
+          required,
+          validDateFormat(this.userDateFormat),
+          promiseDebounce(this.validateDate, 500),
+        ],
         length: [required],
       },
     };
+  },
+
+  computed: {
+    locationOptions() {
+      return [
+        {id: 0, label: this.$t('leave.all_locations')},
+        ...this.locations.map(({id, name}) => ({id, label: name})),
+      ];
+    },
+  },
+
+  watch: {
+    'holiday.location'() {
+      this.revalidateDate();
+    },
+    'holiday.recurring'() {
+      this.revalidateDate();
+    },
   },
   created() {
     this.isLoading = true;
@@ -170,41 +207,10 @@ export default {
             return h.id === data.length;
           });
         }
-        // Fetch list data for unique test
-        const today = new Date();
-        const startDate =
-          today.getFullYear() -
-          100 +
-          '-' +
-          (today.getMonth() + 1) +
-          '-' +
-          today.getDate();
-        const endDate =
-          today.getFullYear() +
-          100 +
-          '-' +
-          (today.getMonth() + 1) +
-          '-' +
-          today.getDate();
-        return this.http.getAll({
-          fromDate: startDate,
-          toDate: endDate,
-          limit: 0,
-        });
-      })
-      .then((response) => {
-        const {data} = response.data;
-        this.rules.date.push((v) => {
-          const index = data.findIndex((item) => item.date === v);
-          if (index > -1) {
-            const id = data[index].id;
-            return id != this.holidayId
-              ? this.$t('general.already_exists')
-              : true;
-          } else {
-            return true;
-          }
-        });
+        const locationId = data.location?.id ?? 0;
+        this.holiday.location = this.locationOptions.find(
+          (l) => l.id === locationId,
+        ) ?? {id: locationId, label: data.location.name};
       })
       .finally(() => {
         this.isLoading = false;
@@ -212,6 +218,40 @@ export default {
   },
 
   methods: {
+    validateDate(date) {
+      return new Promise((resolve) => {
+        this.http
+          .request({
+            method: 'GET',
+            url: '/api/v2/leave/validation/holiday-date',
+            params: {
+              date,
+              recurring: this.holiday.recurring,
+              locationId: this.holiday.location?.id || undefined,
+              holidayId: this.holidayId,
+            },
+          })
+          .then(({data}) => {
+            const {reason} = data.data;
+            if (reason === 'clash') {
+              resolve(this.$t('leave.holiday_date_clash'));
+            } else if (reason === 'allLocations') {
+              resolve(this.$t('leave.holiday_all_locations'));
+            } else {
+              resolve(true);
+            }
+          });
+      });
+    },
+    revalidateDate() {
+      const date = this.holiday.date;
+      if (!date) return;
+      // Field validation only runs when its value changes
+      this.holiday.date = '';
+      this.$nextTick(() => {
+        this.holiday.date = date;
+      });
+    },
     onSave() {
       this.isLoading = true;
       this.http
@@ -220,6 +260,7 @@ export default {
           date: this.holiday.date,
           recurring: this.holiday.recurring,
           length: this.holiday.length.id,
+          locationId: this.holiday.location?.id || null,
         })
         .then(() => {
           return this.$toast.updateSuccess();

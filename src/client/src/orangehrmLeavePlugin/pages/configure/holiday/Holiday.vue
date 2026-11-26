@@ -29,6 +29,7 @@
                 :label="$t('general.from')"
                 :rules="rules.fromDate"
                 :years="yearArray"
+                all-holidays
               />
             </oxd-grid-item>
             <oxd-grid-item>
@@ -37,6 +38,15 @@
                 :label="$t('general.to')"
                 :rules="rules.toDate"
                 :years="yearArray"
+                all-holidays
+              />
+            </oxd-grid-item>
+            <oxd-grid-item>
+              <oxd-input-field
+                v-model="filters.location"
+                type="select"
+                :label="$t('general.location')"
+                :options="locationOptions"
               />
             </oxd-grid-item>
           </oxd-grid>
@@ -113,6 +123,7 @@ import {yearRange} from '@ohrm/core/util/helper/year-range';
 import useDateFormat from '@/core/util/composable/useDateFormat';
 import {formatDate, parseDate} from '@/core/util/helper/datefns';
 import useLocale from '@/core/util/composable/useLocale';
+import usei18n from '@/core/util/composable/usei18n';
 
 export default {
   components: {
@@ -123,18 +134,32 @@ export default {
       type: Object,
       required: true,
     },
+    locations: {
+      type: Array,
+      default: () => [],
+    },
   },
 
   setup(props) {
+    const {$t: t} = usei18n();
     const filters = ref({
       fromDate: props.leavePeriod.startDate,
       toDate: props.leavePeriod.endDate,
+      location: null,
     });
 
+    const locationOptions = computed(() => [
+      {id: 0, label: t('leave.all_locations')},
+      ...props.locations.map(({id, name}) => ({id, label: name})),
+    ]);
+
     const serializedFilters = computed(() => {
+      const location = filters.value.location;
       return {
         fromDate: filters.value.fromDate,
         toDate: filters.value.toDate,
+        orgWideOnly: location?.id === 0 ? true : undefined,
+        locationId: location?.id || undefined,
       };
     });
 
@@ -148,6 +173,7 @@ export default {
           date: formatDate(parseDate(item.date), jsDateFormat, {locale}),
           recurring: item.recurring ? 'Yes' : 'No',
           length: item.lengthName,
+          location: item.location?.name ?? t('leave.all_locations'),
         };
       });
     };
@@ -181,6 +207,7 @@ export default {
       execQuery,
       items: response,
       filters,
+      locationOptions,
       userDateFormat,
     };
   },
@@ -211,6 +238,11 @@ export default {
         {
           name: 'length',
           title: this.$t('leave.full_day_half_day'),
+          style: {flex: 2},
+        },
+        {
+          name: 'location',
+          title: this.$t('general.location'),
           style: {flex: 2},
         },
         {

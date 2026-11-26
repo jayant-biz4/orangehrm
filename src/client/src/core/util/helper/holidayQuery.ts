@@ -19,7 +19,11 @@ export const buildHolidayQuery = function (
   fromDate: string,
   toDate: string,
   empNumber: number | null,
+  allHolidays = false,
 ): Record<string, string | number | boolean> {
+  if (allHolidays) {
+    return {fromDate, toDate};
+  }
   return empNumber === null
     ? {fromDate, toDate, currentEmployee: true}
     : {fromDate, toDate, empNumber};

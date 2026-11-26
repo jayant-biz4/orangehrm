@@ -19,6 +19,7 @@
 
 namespace OrangeHRM\Leave\Controller;
 
+use OrangeHRM\Admin\Service\LocationService;
 use OrangeHRM\Core\Controller\AbstractVueController;
 use OrangeHRM\Core\Vue\Component;
 use OrangeHRM\Core\Vue\Prop;
@@ -29,6 +30,19 @@ class HolidayController extends AbstractVueController
 {
     use LeavePeriodServiceTrait;
 
+    protected ?LocationService $locationService = null;
+
+    /**
+     * @return LocationService
+     */
+    protected function getLocationService(): LocationService
+    {
+        if (!$this->locationService instanceof LocationService) {
+            $this->locationService = new LocationService();
+        }
+        return $this->locationService;
+    }
+
     /**
      * @inheritDoc
      */
@@ -37,6 +51,8 @@ class HolidayController extends AbstractVueController
         $leavePeriod = $this->getLeavePeriodService()->getNormalizedCurrentLeavePeriod();
         $component = new Component('holiday-list');
         $component->addProp(new Prop('leave-period', Prop::TYPE_OBJECT, $leavePeriod));
+        $locations = $this->getLocationService()->getAccessibleLocationsArray();
+        $component->addProp(new Prop('locations', Prop::TYPE_ARRAY, $locations));
 
         $this->setComponent($component);
     }
