@@ -46,6 +46,9 @@ correct once the location filter is applied.
   EmployeeTimeReport) and Attendance (ViewEmployeeAttendanceDetailed, EditAttendance,
   AttendanceSummaryReport). This is only the shading. Leave calculation is unaffected.
 
+Saving (including renaming) or deleting a location also clears the holiday cache, because cached
+holiday lists embed the location name.
+
 ## Deploy (in this order)
 
 1. **Pre-deploy check.** Run:
@@ -57,20 +60,47 @@ correct once the location filter is applied.
    It must return no rows. An employee listed has several locations, and holiday resolution would
    use only the first. Fix those rows in Job Details before deploying.
 2. **Back up the database.**
-3. **Put the schema in place before the new code is live**, or use maintenance mode for steps 3 to 5.
-   The new code maps `location_id`, so with the code live and the schema missing, holiday and leave
-   calls fail with SQL errors.
+3. **Schema must exist before the new code serves requests.** The new code maps `location_id`, so
+   with the code live and the schema missing, holiday and leave calls fail with SQL errors.
    - Upgrading from 5.9 or earlier: run the upgrader. The fork step runs automatically, as the last
-     step of `'5.9.1'`.
+     step of `'5.9.1'`. This is the only path that can run the schema first.
    - Instance already at 5.9.1, or the fork step failed after upstream's 5.9.1 step (the upgrader
      will not retry it): `php bin/console orangehrm:leave:location-holidays-schema`. The command
-     ships with the new code, so deploy, run it, clear the cache (step 5), then leave maintenance
-     mode. It adds the column, index, foreign key, lang strings and API permission if missing, and
-     is safe to run any number of times. It needs a database user that can ALTER.
+     ships with the new code, so the new code is live before the schema exists on this path.
+     **Maintenance mode is required** from deploying the code until the command has run and the
+     cache is cleared (step 5). It adds the column, index, foreign key, lang strings and API
+     permission if missing, and is safe to run any number of times. It needs a database user that
+     can ALTER.
 4. **Deploy the code.** The compiled frontend (`web/dist`) is committed (commit "build: rebuild
    frontend for location holidays"), so no frontend build is needed.
 5. **Clear the cache:** `php bin/console cache:clear`, then `php bin/console orm:generate-proxies`.
    With stale Doctrine metadata, `location_id` is saved as NULL (seen in dev).
+
+## Rollback
+
+Restore the code first, then the schema. Take a backup before doing either.
+
+**If any location holidays exist, restore the database from backup instead.** Dropping
+`location_id` removes the distinction: every location holiday becomes an org-wide holiday and
+applies to all employees.
+
+Manual schema rollback:
+
+```sql
+ALTER TABLE ohrm_holiday DROP FOREIGN KEY holiday_location_id;
+ALTER TABLE ohrm_holiday DROP INDEX holiday_location_id_date;
+ALTER TABLE ohrm_holiday DROP COLUMN location_id;
+
+DELETE urdg FROM ohrm_user_role_data_group urdg
+  JOIN ohrm_data_group dg ON dg.id = urdg.data_group_id
+  WHERE dg.name = 'apiv2_leave_holiday_date_validation';
+DELETE ap FROM ohrm_api_permission ap
+  JOIN ohrm_data_group dg ON dg.id = ap.data_group_id
+  WHERE dg.name = 'apiv2_leave_holiday_date_validation';
+DELETE FROM ohrm_data_group WHERE name = 'apiv2_leave_holiday_date_validation';
+```
+
+The lang strings may stay; they are unused. Then clear the cache (`php bin/console cache:clear`).
 
 ## API changes (`/api/v2/leave/holidays`)
 
@@ -112,7 +142,7 @@ seeded there too.
 | `src/plugins/orangehrmLeavePlugin/Api/HolidayDateValidationAPI.php`, `config/routes.yaml` | validation endpoint |
 | `src/plugins/orangehrmLeavePlugin/Command/LocationHolidaysSchemaCommand.php`, `config/LeavePluginConfiguration.php` | schema command |
 | `src/plugins/orangehrmLeavePlugin/Controller/HolidayController.php`, `SaveHolidayController.php` | page props |
-| `src/plugins/orangehrmAdminPlugin/Service/LocationService.php` | clear the holiday cache on location delete |
+| `src/plugins/orangehrmAdminPlugin/Service/LocationService.php` | clear the holiday cache on location save and delete |
 | `src/client/src/core/components/inputs/DateInput.vue`, `core/util/helper/holidayQuery.ts` | shading per employee |
 | `src/client/src/orangehrmLeavePlugin/pages/configure/holiday/*`, `pages/LeaveAssign.vue` | location field, live validation |
 | `web/dist/*` | rebuilt frontend |
