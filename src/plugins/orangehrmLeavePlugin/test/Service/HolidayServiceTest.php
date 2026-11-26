@@ -134,6 +134,17 @@ class HolidayServiceTest extends KernelTestCase
         );
     }
 
+    public function testValidateOrgWideRecurringClashesWithDatedLocation(): void
+    {
+        TestDataService::populate($this->fixture);
+        Doctrine::getEntityManager()->persist($this->newHoliday('2027-03-15', false, 1));
+        Doctrine::getEntityManager()->flush();
+        $this->assertSame(
+            HolidayService::VALIDATION_CLASH,
+            $this->holidayService->validateHoliday($this->newHoliday('2020-03-15', true, null))
+        );
+    }
+
     public function testValidateSameLocationClash(): void
     {
         TestDataService::populate($this->fixture);
