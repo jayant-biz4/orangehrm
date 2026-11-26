@@ -30,7 +30,7 @@
 </template>
 
 <script>
-import {onBeforeMount, reactive, toRefs} from 'vue';
+import {onBeforeMount, reactive, toRefs, watch} from 'vue';
 import {APIService} from '@ohrm/core/util/services/api.service';
 import {
   startOfYear,
@@ -38,15 +38,23 @@ import {
   formatDate,
   parseDate,
 } from '@ohrm/core/util/helper/datefns';
+import {buildHolidayQuery} from '@ohrm/core/util/helper/holidayQuery';
 import useDateFormat from '@/core/util/composable/useDateFormat';
 import useLocale from '@/core/util/composable/useLocale';
 
 export default {
   name: 'DateInput',
-  setup() {
+  props: {
+    empNumber: {
+      type: Number,
+      default: null,
+    },
+  },
+  setup(props) {
     const state = reactive({
       attributes: [],
       events: [],
+      year: new Date().getFullYear(),
     });
     const http = new APIService(window.appGlobal.baseUrl, '');
     const {jsDateFormat, userDateFormat} = useDateFormat();
@@ -88,10 +96,7 @@ export default {
         .request({
           method: 'GET',
           url: '/api/v2/leave/holidays',
-          params: {
-            fromDate,
-            toDate,
-          },
+          params: buildHolidayQuery(fromDate, toDate, props.empNumber),
           validateStatus: responseValidator,
         })
         .then(({data}) => {
@@ -108,11 +113,17 @@ export default {
     };
 
     const onSelectYear = async ({year}) => {
+      state.year = year;
       const now = new Date().setFullYear(year);
       const fromDate = formatDate(startOfYear(now), 'yyyy-MM-dd');
       const endDate = formatDate(endOfYear(now), 'yyyy-MM-dd');
       fetchEvents(fromDate, endDate);
     };
+
+    watch(
+      () => props.empNumber,
+      () => onSelectYear({year: state.year}),
+    );
 
     onBeforeMount(async () => {
       await fetchWorkWeek();

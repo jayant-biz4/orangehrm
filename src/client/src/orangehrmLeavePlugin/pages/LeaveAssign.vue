@@ -70,6 +70,7 @@
                 :label="$t('general.from_date')"
                 :rules="rules.fromDate"
                 :years="yearsArray"
+                :emp-number="leave.employee?.id ?? null"
                 required
               />
             </oxd-grid-item>
@@ -79,6 +80,7 @@
                 :label="$t('general.to_date')"
                 :rules="rules.toDate"
                 :years="yearsArray"
+                :emp-number="leave.employee?.id ?? null"
                 required
               />
             </oxd-grid-item>
