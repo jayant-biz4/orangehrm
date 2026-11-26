@@ -1,6 +1,10 @@
 Country:
   - {cou_code: 'LK', name: 'SRI LANKA', cou_name: 'Sri Lanka', iso3: 'LKA', numcode: 144 }
 
+Location:
+  - {id: 1, name: 'Colombo', country_code: 'LK'}
+  - {id: 2, name: 'Kandy', country_code: 'LK'}
+
 OperationalCountry:
   - { id: 1, country_code: 'LK' }
 
@@ -13,3 +17,6 @@ Holiday:
   - {id: 6, recurring: 1, name: "Father`s Day", date: '2021-07-25', length: 8}
   - {id: 7, recurring: 0, name: 'Constitution Day', date: '2021-07-25', length: 8}
   - {id: 8, recurring: 1, name: 'Christmas Day', date: '2021-12-25', length: 8}
+  - {id: 9,  recurring: 1, name: 'Colombo Day', date: '2021-09-10', length: 0, location_id: 1}
+  - {id: 10, recurring: 0, name: 'Kandy Perahera', date: '2021-08-20', length: 0, location_id: 2}
+  - {id: 11, recurring: 0, name: 'Colombo Half', date: '2021-08-20', length: 4, location_id: 1}

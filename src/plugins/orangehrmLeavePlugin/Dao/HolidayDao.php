@@ -22,6 +22,7 @@ namespace OrangeHRM\Leave\Dao;
 use DateTime;
 use OrangeHRM\Core\Dao\BaseDao;
 use OrangeHRM\Entity\Holiday;
+use OrangeHRM\Entity\Location;
 use OrangeHRM\Leave\Dto\HolidaySearchFilterParams;
 use OrangeHRM\ORM\Paginator;
 
@@ -91,6 +92,25 @@ class HolidayDao extends BaseDao
                 ->setParameter('recurring', true);
         }
 
+        // Must stay after the recurring orWhere so it yields `(A OR B) AND location`
+        switch ($holidaySearchFilterParams->getLocationFilter()) {
+            case HolidaySearchFilterParams::LOCATION_FILTER_LOCATION:
+                $q->andWhere('holiday.location = :locationId')
+                    ->setParameter('locationId', $holidaySearchFilterParams->getLocationId());
+                break;
+            case HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE:
+                $q->andWhere($q->expr()->isNull('holiday.location'));
+                break;
+            case HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE:
+                $q->andWhere(
+                    $q->expr()->orX(
+                        $q->expr()->isNull('holiday.location'),
+                        $q->expr()->eq('holiday.location', ':locationId')
+                    )
+                )->setParameter('locationId', $holidaySearchFilterParams->getLocationId());
+                break;
+        }
+
         return $this->getPaginator($q);
     }
 
@@ -109,6 +129,85 @@ class HolidayDao extends BaseDao
             ->setParameter('date', $date);
 
         return $this->fetchOne($q);
+    }
+
+    /**
+     * Holiday applying to the given location: org-wide ones plus the location's own
+     * (only org-wide when $locationId is null).
+     * @param DateTime $date
+     * @param int|null $locationId
+     * @return Holiday|null
+     */
+    public function getHolidayForLocationByDate(DateTime $date, ?int $locationId): ?Holiday
+    {
+        $q = $this->createQueryBuilder(Holiday::class, 'holiday');
+        $q->andWhere($q->expr()->eq($q->expr()->substring('holiday.date', 6), ':datePortion'))
+            ->setParameter('datePortion', $date->format('m') . '-' . $date->format('d'));
+        $q->andWhere('holiday.recurring = :recurring')
+            ->setParameter('recurring', true);
+        $q->orWhere('holiday.date = :date')
+            ->setParameter('date', $date);
+
+        // Must stay after the orWhere so it yields `(A OR B) AND location`
+        if ($locationId === null) {
+            $q->andWhere($q->expr()->isNull('holiday.location'));
+        } else {
+            $q->andWhere(
+                $q->expr()->orX(
+                    $q->expr()->isNull('holiday.location'),
+                    $q->expr()->eq('holiday.location', ':locationId')
+                )
+            )->setParameter('locationId', $locationId);
+        }
+
+        return $this->fetchOne($q);
+    }
+
+    /**
+     * Holidays (any location) colliding with the given date.
+     * @param DateTime $date
+     * @param bool $recurring
+     * @param int|null $excludeHolidayId
+     * @return Holiday[]
+     */
+    public function getSameDateHolidays(DateTime $date, bool $recurring, ?int $excludeHolidayId): array
+    {
+        $q = $this->createQueryBuilder(Holiday::class, 'holiday');
+        $monthDay = $date->format('m-d');
+        if ($recurring) {
+            $q->andWhere($q->expr()->eq($q->expr()->substring('holiday.date', 6), ':monthDay'))
+                ->setParameter('monthDay', $monthDay);
+        } else {
+            $q->andWhere(
+                $q->expr()->orX(
+                    $q->expr()->eq('holiday.date', ':date'),
+                    $q->expr()->andX(
+                        $q->expr()->eq($q->expr()->substring('holiday.date', 6), ':monthDay'),
+                        $q->expr()->eq('holiday.recurring', ':recurring')
+                    )
+                )
+            )
+                ->setParameter('date', $date)
+                ->setParameter('monthDay', $monthDay)
+                ->setParameter('recurring', true);
+        }
+        if ($excludeHolidayId !== null) {
+            $q->andWhere('holiday.id != :excludeId')
+                ->setParameter('excludeId', $excludeHolidayId);
+        }
+        $q->addOrderBy('holiday.id');
+
+        return $q->getQuery()->execute();
+    }
+
+    /**
+     * @return int
+     */
+    public function getLocationCount(): int
+    {
+        $q = $this->createQueryBuilder(Location::class, 'location');
+        $q->select($q->expr()->count('location.id'));
+        return (int)$q->getQuery()->getSingleScalarResult();
     }
 
     /**

@@ -87,7 +87,7 @@ class HolidayDaoTest extends TestCase
         $holidaySearchFilterParams = new HolidaySearchFilterParams();
         $holidays = $this->holidayDao->searchHolidays($holidaySearchFilterParams);
 
-        $this->assertCount(5, $holidays);
+        $this->assertCount(6, $holidays);
         foreach ($holidays as $holiday) {
             $this->assertTrue($holiday->isRecurring());
         }
@@ -156,14 +156,15 @@ class HolidayDaoTest extends TestCase
         $holidaySearchFilterParams->setToDate(new DateTime('2010-08-28'));
         $holidays = $this->holidayDao->searchHolidays($holidaySearchFilterParams);
 
-        $this->assertCount(7, $holidays);
+        $this->assertCount(8, $holidays);
         $this->assertEquals('Public Holiday', $holidays[0]->getName());
         $this->assertEquals('Fullmoon Day', $holidays[1]->getName());
         $this->assertEquals('Home Holiday', $holidays[2]->getName());
         $this->assertEquals('Personal Holiday', $holidays[3]->getName());
         $this->assertEquals('Sports Day', $holidays[4]->getName());
         $this->assertEquals('Father`s Day', $holidays[5]->getName());
-        $this->assertEquals('Christmas Day', $holidays[6]->getName());
+        $this->assertEquals('Colombo Day', $holidays[6]->getName());
+        $this->assertEquals('Christmas Day', $holidays[7]->getName());
     }
 
     public function testGetHolidayByDate(): void
@@ -183,6 +184,83 @@ class HolidayDaoTest extends TestCase
         $holiday = $this->holidayDao->getHolidayByDate(new DateTime('2021-07-25'));
         // Not getting `Constitution Day` since `Father`s Day` added as recurring but same date in fixtures
         $this->assertEquals('Father`s Day', $holiday->getName());
+    }
+
+    private function ids(array $holidays): array
+    {
+        return array_map(fn (Holiday $h) => $h->getId(), $holidays);
+    }
+
+    public function testGetHolidayForLocationByDateOrgWide(): void
+    {
+        $this->assertEquals(8, $this->holidayDao->getHolidayForLocationByDate(new DateTime('2021-12-25'), 1)->getId());
+    }
+
+    public function testGetHolidayForLocationByDateOwnLocation(): void
+    {
+        $this->assertEquals(11, $this->holidayDao->getHolidayForLocationByDate(new DateTime('2021-08-20'), 1)->getId());
+        $this->assertEquals(10, $this->holidayDao->getHolidayForLocationByDate(new DateTime('2021-08-20'), 2)->getId());
+    }
+
+    public function testGetHolidayForLocationByDateIgnoresOtherLocationRecurring(): void
+    {
+        $this->assertNull($this->holidayDao->getHolidayForLocationByDate(new DateTime('2022-09-10'), 2));
+        $this->assertEquals(9, $this->holidayDao->getHolidayForLocationByDate(new DateTime('2022-09-10'), 1)->getId());
+    }
+
+    public function testGetHolidayForLocationByDateNoLocation(): void
+    {
+        $this->assertNull($this->holidayDao->getHolidayForLocationByDate(new DateTime('2021-08-20'), null));
+        $this->assertEquals(8, $this->holidayDao->getHolidayForLocationByDate(new DateTime('2021-12-25'), null)->getId());
+    }
+
+    public function testSearchHolidaysLocationFilters(): void
+    {
+        $params = new HolidaySearchFilterParams();
+        $params->setFromDate(new DateTime('2021-01-01'));
+        $params->setToDate(new DateTime('2021-12-31'));
+
+        $params->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_LOCATION, 1);
+        $this->assertEquals([11, 9], $this->ids($this->holidayDao->searchHolidays($params)));
+
+        $params->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE);
+        $ids = $this->ids($this->holidayDao->searchHolidays($params));
+        $this->assertContains(8, $ids);
+        foreach ([9, 10, 11] as $id) {
+            $this->assertNotContains($id, $ids);
+        }
+
+        $params->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, 2);
+        $ids = $this->ids($this->holidayDao->searchHolidays($params));
+        $this->assertContains(10, $ids);
+        $this->assertContains(8, $ids);
+        $this->assertNotContains(9, $ids);
+        $this->assertNotContains(11, $ids);
+
+        $params->setLocationFilter(null);
+        $ids = $this->ids($this->holidayDao->searchHolidays($params));
+        foreach ([8, 9, 10, 11] as $id) {
+            $this->assertContains($id, $ids);
+        }
+    }
+
+    public function testGetSameDateHolidaysDated(): void
+    {
+        $ids = $this->ids($this->holidayDao->getSameDateHolidays(new DateTime('2021-08-20'), false, null));
+        sort($ids);
+        $this->assertEquals([10, 11], $ids);
+        $this->assertEquals([10], $this->ids($this->holidayDao->getSameDateHolidays(new DateTime('2021-08-20'), false, 11)));
+    }
+
+    public function testGetSameDateHolidaysRecurringMatch(): void
+    {
+        $this->assertEquals([8], $this->ids($this->holidayDao->getSameDateHolidays(new DateTime('2030-12-25'), false, null)));
+        $this->assertEquals([9], $this->ids($this->holidayDao->getSameDateHolidays(new DateTime('2030-09-10'), true, null)));
+    }
+
+    public function testGetLocationCount(): void
+    {
+        $this->assertEquals(2, $this->holidayDao->getLocationCount());
     }
 
     public function testDeleteHolidays(): void

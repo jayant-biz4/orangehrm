@@ -22,11 +22,24 @@ namespace OrangeHRM\Leave\Dto;
 class HolidaySearchFilterParams extends DateRangeSearchFilterParams
 {
     public const ALLOWED_SORT_FIELDS = ['holiday.date'];
+    public const LOCATION_FILTER_LOCATION = 'location';
+    public const LOCATION_FILTER_ORG_WIDE = 'orgWide';
+    public const LOCATION_FILTER_EFFECTIVE = 'effective';
 
     /**
      * @var bool
      */
     private bool $excludeRecurring = false;
+
+    /**
+     * @var string|null
+     */
+    private ?string $locationFilter = null;
+
+    /**
+     * @var int|null
+     */
+    private ?int $locationId = null;
 
     public function __construct()
     {
@@ -47,5 +60,31 @@ class HolidaySearchFilterParams extends DateRangeSearchFilterParams
     public function setExcludeRecurring(bool $excludeRecurring): void
     {
         $this->excludeRecurring = $excludeRecurring;
+    }
+
+    /**
+     * @param string|null $filter one of the LOCATION_FILTER_* constants, null for no location condition
+     * @param int|null $locationId
+     */
+    public function setLocationFilter(?string $filter, ?int $locationId = null): void
+    {
+        $this->locationFilter = $filter;
+        $this->locationId = $locationId;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getLocationFilter(): ?string
+    {
+        return $this->locationFilter;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getLocationId(): ?int
+    {
+        return $this->locationId;
     }
 }
