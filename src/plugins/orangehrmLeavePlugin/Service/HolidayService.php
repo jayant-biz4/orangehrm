@@ -26,20 +26,29 @@ use OrangeHRM\Entity\Holiday;
 use OrangeHRM\Entity\WorkWeek;
 use OrangeHRM\Leave\Dao\HolidayDao;
 use OrangeHRM\Leave\Dto\HolidaySearchFilterParams;
+use OrangeHRM\Pim\Traits\Service\EmployeeServiceTrait;
 
 class HolidayService
 {
     use CacheTrait;
     use ConfigServiceTrait;
+    use EmployeeServiceTrait;
 
     public const LEAVE_HOLIDAYS_CACHE_KEY_PREFIX = 'leave.holidays';
     public const PARAMETER_DATA = 'data';
     public const PARAMETER_TOTAL = 'total';
+    public const VALIDATION_CLASH = 'clash';
+    public const VALIDATION_ALL_LOCATIONS = 'allLocations';
 
     /**
      * @var HolidayDao|null
      */
     private ?HolidayDao $holidayDao = null;
+
+    /**
+     * @var array<int, int|null> empNumber => locationId (null when the employee has no location)
+     */
+    private array $employeeLocationIds = [];
 
     /**
      * @return HolidayDao
@@ -65,12 +74,19 @@ class HolidayService
     /**
      * @param DateTime $fromDate
      * @param DateTime $toDate
+     * @param string|null $locationFilter
+     * @param int|null $locationId
      * @return string
      */
-    protected function getHolidaysCacheKey(DateTime $fromDate, DateTime $toDate): string
-    {
+    protected function getHolidaysCacheKey(
+        DateTime $fromDate,
+        DateTime $toDate,
+        ?string $locationFilter = null,
+        ?int $locationId = null
+    ): string {
         return self::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX .
-            '.' . $fromDate->format('Y_m_d') . '.' . $toDate->format('Y_m_d');
+            '.' . $fromDate->format('Y_m_d') . '.' . $toDate->format('Y_m_d') .
+            '.' . ($locationFilter ?? 'all') . '.' . ($locationId ?? 'none');
     }
 
     /**
@@ -84,13 +100,11 @@ class HolidayService
         $limit = $holidaySearchFilterParams->getLimit();
         if ($limit == 0) {  // when check uniqueness
             return $this->searchHolidaysAlongWithCache(
-                $holidaySearchFilterParams->getFromDate(),
-                $holidaySearchFilterParams->getToDate()
+                $holidaySearchFilterParams
             )[self::PARAMETER_DATA];
         }
         return array_slice($this->searchHolidaysAlongWithCache(
-            $holidaySearchFilterParams->getFromDate(),
-            $holidaySearchFilterParams->getToDate()
+            $holidaySearchFilterParams
         )[self::PARAMETER_DATA], $offset, $limit);
     }
 
@@ -101,37 +115,47 @@ class HolidayService
     public function searchHolidaysCount(HolidaySearchFilterParams $holidaySearchFilterParams): int
     {
         return $this->searchHolidaysAlongWithCache(
-            $holidaySearchFilterParams->getFromDate(),
-            $holidaySearchFilterParams->getToDate()
+            $holidaySearchFilterParams
         )[self::PARAMETER_TOTAL];
     }
 
     /**
-     * @param DateTime $fromDate
-     * @param DateTime $toDate
+     * @param HolidaySearchFilterParams $filterParams
      * @return array
      */
-    protected function searchHolidaysAlongWithCache(DateTime $fromDate, DateTime $toDate): array
+    protected function searchHolidaysAlongWithCache(HolidaySearchFilterParams $filterParams): array
     {
+        $fromDate = $filterParams->getFromDate();
+        $toDate = $filterParams->getToDate();
         return $this->getCache()->get(
-            $this->getHolidaysCacheKey($fromDate, $toDate),
-            function () use ($fromDate, $toDate) {
-                $holidays = $this->getCalculatedHolidays($fromDate, $toDate);
+            $this->getHolidaysCacheKey(
+                $fromDate,
+                $toDate,
+                $filterParams->getLocationFilter(),
+                $filterParams->getLocationId()
+            ),
+            function () use ($filterParams) {
+                $holidays = $this->getCalculatedHolidays($filterParams);
                 return [self::PARAMETER_DATA => $holidays, self::PARAMETER_TOTAL => count($holidays)];
             }
         );
     }
 
     /**
-     * @param DateTime $fromDate
-     * @param DateTime $toDate
+     * @param HolidaySearchFilterParams $filterParams
      * @return array
      */
-    protected function getCalculatedHolidays(DateTime $fromDate, DateTime $toDate): array
+    protected function getCalculatedHolidays(HolidaySearchFilterParams $filterParams): array
     {
+        $fromDate = $filterParams->getFromDate();
+        $toDate = $filterParams->getToDate();
         $holidaySearchFilterParams = new HolidaySearchFilterParams();
         $holidaySearchFilterParams->setFromDate($fromDate);
         $holidaySearchFilterParams->setToDate($toDate);
+        $holidaySearchFilterParams->setLocationFilter(
+            $filterParams->getLocationFilter(),
+            $filterParams->getLocationId()
+        );
         $holidayList = $this->getHolidayDao()->searchHolidays($holidaySearchFilterParams);
 
         $startYear = $fromDate->format('Y');
@@ -176,12 +200,42 @@ class HolidayService
     }
 
     /**
+     * @param int $empNumber
+     * @return int|null
+     */
+    public function getEmployeeLocationId(int $empNumber): ?int
+    {
+        if (!array_key_exists($empNumber, $this->employeeLocationIds)) {
+            $employee = $this->getEmployeeService()->getEmployeeByEmpNumber($empNumber);
+            $this->employeeLocationIds[$empNumber] = $employee?->getDecorator()->getLocation()?->getId();
+        }
+        return $this->employeeLocationIds[$empNumber];
+    }
+
+    /**
      * @param DateTime $day
+     * @param int|null $empNumber null means the global (location independent) lookup
+     * @return Holiday|null
+     */
+    private function getHolidayForDay(DateTime $day, ?int $empNumber): ?Holiday
+    {
+        if ($empNumber === null) {
+            return $this->getHolidayDao()->getHolidayByDate($day);
+        }
+        return $this->getHolidayDao()->getHolidayForLocationByDate(
+            $day,
+            $this->getEmployeeLocationId($empNumber)
+        );
+    }
+
+    /**
+     * @param DateTime $day
+     * @param int|null $empNumber
      * @return bool
      */
-    public function isHoliday(DateTime $day): bool
+    public function isHoliday(DateTime $day, ?int $empNumber = null): bool
     {
-        $holiday = $this->getHolidayDao()->getHolidayByDate($day);
+        $holiday = $this->getHolidayForDay($day, $empNumber);
         if ($holiday != null && $holiday->getLength() == Holiday::HOLIDAY_FULL_DAY_LENGTH) {
             return true;
         }
@@ -190,11 +244,12 @@ class HolidayService
 
     /**
      * @param DateTime $day
+     * @param int|null $empNumber
      * @return bool
      */
-    public function isHalfDay(DateTime $day): bool
+    public function isHalfDay(DateTime $day, ?int $empNumber = null): bool
     {
-        $holiday = $this->getHolidayDao()->getHolidayByDate($day);
+        $holiday = $this->getHolidayForDay($day, $empNumber);
         if ($holiday != null &&
             $holiday->getLength() >= WorkWeek::WORKWEEK_LENGTH_HALF_DAY &&
             $holiday->getLength() < $this->getConfigService()->getDefaultWorkShiftLength()) {
@@ -205,15 +260,46 @@ class HolidayService
 
     /**
      * @param DateTime $day
+     * @param int|null $empNumber
      * @return bool
      */
-    public function isHalfDayHoliday(DateTime $day): bool
+    public function isHalfDayHoliday(DateTime $day, ?int $empNumber = null): bool
     {
-        $holiday = $this->getHolidayDao()->getHolidayByDate($day);
+        $holiday = $this->getHolidayForDay($day, $empNumber);
         if ($holiday != null && $holiday->getLength() == Holiday::HOLIDAY_HALF_DAY_LENGTH) {
             return true;
         }
         return false;
+    }
+
+    /**
+     * @param Holiday $holiday
+     * @return string|null null when valid, else self::VALIDATION_CLASH or self::VALIDATION_ALL_LOCATIONS
+     */
+    public function validateHoliday(Holiday $holiday): ?string
+    {
+        try {
+            $holidayId = $holiday->getId();
+        } catch (\Error) {
+            $holidayId = null; // new holiday, id not assigned yet
+        }
+        $same = $this->getHolidayDao()->getSameDateHolidays($holiday->getDate(), $holiday->isRecurring(), $holidayId);
+        if ($holiday->getDecorator()->isOrgWide()) {
+            return empty($same) ? null : self::VALIDATION_CLASH;
+        }
+
+        $locationId = $holiday->getLocation()->getId();
+        $otherLocationIds = [];
+        foreach ($same as $existing) {
+            if ($existing->getDecorator()->isOrgWide() || $existing->getLocation()->getId() === $locationId) {
+                return self::VALIDATION_CLASH;
+            }
+            $otherLocationIds[$existing->getLocation()->getId()] = true;
+        }
+        if (count($otherLocationIds) + 1 >= $this->getHolidayDao()->getLocationCount()) {
+            return self::VALIDATION_ALL_LOCATIONS;
+        }
+        return null;
     }
 
     /**

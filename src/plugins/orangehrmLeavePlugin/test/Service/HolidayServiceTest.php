@@ -27,6 +27,8 @@ use OrangeHRM\Framework\Services;
 use OrangeHRM\Leave\Dao\HolidayDao;
 use OrangeHRM\Leave\Dto\HolidaySearchFilterParams;
 use OrangeHRM\Leave\Service\HolidayService;
+use OrangeHRM\ORM\Doctrine;
+use OrangeHRM\Pim\Service\EmployeeService;
 use OrangeHRM\Tests\Util\KernelTestCase;
 use OrangeHRM\Tests\Util\TestDataService;
 
@@ -45,7 +47,7 @@ class HolidayServiceTest extends KernelTestCase
         $this->holidayService = new HolidayService();
         $cache = new FilesystemAdapter();
         $cache->clear();
-        $this->createKernelWithMockServices([Services::CACHE => $cache]);
+        $this->createKernelWithMockServices([Services::CACHE => $cache, Services::EMPLOYEE_SERVICE => new EmployeeService()]);
     }
 
     public function testGetSetHolidayDao(): void
@@ -74,6 +76,109 @@ class HolidayServiceTest extends KernelTestCase
             ->willReturn($holidayDao);
 
         $this->assertTrue($holidayService->saveHoliday($holiday) instanceof Holiday);
+    }
+
+    private function newHoliday(string $date, bool $recurring, ?int $locationId): Holiday
+    {
+        $holiday = new Holiday();
+        $holiday->setName('Test');
+        $holiday->setDate(new DateTime($date));
+        $holiday->setRecurring($recurring);
+        $holiday->setLength(Holiday::HOLIDAY_FULL_DAY_LENGTH);
+        $holiday->getDecorator()->setLocationById($locationId);
+        return $holiday;
+    }
+
+    public function testIsHolidayForEmployee(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertTrue($this->holidayService->isHoliday(new DateTime('2021-08-20'), 1));
+        $this->assertFalse($this->holidayService->isHoliday(new DateTime('2021-08-20'), 2));
+        $this->assertTrue($this->holidayService->isHoliday(new DateTime('2022-01-26'), 2));
+        $this->assertFalse($this->holidayService->isHoliday(new DateTime('2021-08-20'), 999));
+    }
+
+    public function testIsHolidayWithoutEmployeeKeepsGlobalBehaviour(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertTrue($this->holidayService->isHoliday(new DateTime('2021-08-20'), null));
+        $this->assertTrue($this->holidayService->isHoliday(new DateTime('2021-08-20')));
+    }
+
+    public function testValidateOrgWideClashesWithLocationHoliday(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertSame(
+            HolidayService::VALIDATION_CLASH,
+            $this->holidayService->validateHoliday($this->newHoliday('2021-08-20', false, null))
+        );
+    }
+
+    public function testValidateLocationClashesWithOrgWide(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertSame(
+            HolidayService::VALIDATION_CLASH,
+            $this->holidayService->validateHoliday($this->newHoliday('2027-01-26', false, 3))
+        );
+    }
+
+    public function testValidateRecurringLocationClashesWithDatedOrgWide(): void
+    {
+        TestDataService::populate($this->fixture);
+        Doctrine::getEntityManager()->persist($this->newHoliday('2028-05-01', false, null));
+        Doctrine::getEntityManager()->flush();
+        $this->assertSame(
+            HolidayService::VALIDATION_CLASH,
+            $this->holidayService->validateHoliday($this->newHoliday('2020-05-01', true, 1))
+        );
+    }
+
+    public function testValidateSameLocationClash(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertSame(
+            HolidayService::VALIDATION_CLASH,
+            $this->holidayService->validateHoliday($this->newHoliday('2021-08-20', false, 1))
+        );
+    }
+
+    public function testValidateAllLocationsRejected(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertSame(
+            HolidayService::VALIDATION_ALL_LOCATIONS,
+            $this->holidayService->validateHoliday($this->newHoliday('2021-08-20', false, 3))
+        );
+    }
+
+    public function testValidateTwoLocationsAllowed(): void
+    {
+        TestDataService::populate($this->fixture);
+        Doctrine::getEntityManager()->remove(Doctrine::getEntityManager()->getReference(Holiday::class, 7));
+        Doctrine::getEntityManager()->flush();
+        $this->assertNull($this->holidayService->validateHoliday($this->newHoliday('2021-08-20', false, 3)));
+    }
+
+    public function testValidateIgnoresItselfOnUpdate(): void
+    {
+        TestDataService::populate($this->fixture);
+        $holiday = Doctrine::getEntityManager()->getRepository(Holiday::class)->find(6);
+        $this->assertNull($this->holidayService->validateHoliday($holiday));
+    }
+
+    public function testCacheKeyDiffersByLocation(): void
+    {
+        TestDataService::populate($this->fixture);
+        $search = function (int $locationId): array {
+            $params = new HolidaySearchFilterParams();
+            $params->setFromDate(new DateTime('2021-08-01'));
+            $params->setToDate(new DateTime('2021-08-31'));
+            $params->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, $locationId);
+            return array_map(fn (Holiday $h) => $h->getId(), $this->holidayService->searchHolidays($params));
+        };
+        $this->assertSame([6], $search(1));
+        $this->assertSame([7], $search(2));
     }
 
     public function testSearchHolidaysNoneRecurring(): void
