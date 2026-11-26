@@ -268,6 +268,9 @@ export default {
         })
         .then(() => {
           this.onCancel();
+        })
+        .catch(() => {
+          this.isLoading = false;
         });
     },
     onCancel() {

@@ -242,6 +242,9 @@ export default {
         .then(() => {
           this.holiday = {...holidayModel};
           this.onCancel();
+        })
+        .catch(() => {
+          this.isLoading = false;
         });
     },
     onCancel() {
