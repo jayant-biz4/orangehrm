@@ -35,7 +35,6 @@ use OrangeHRM\Core\Api\V2\Validator\Rule;
 use OrangeHRM\Core\Api\V2\Validator\Rules;
 use OrangeHRM\Core\Traits\Auth\AuthUserTrait;
 use OrangeHRM\Core\Traits\UserRoleManagerTrait;
-use OrangeHRM\Entity\Employee;
 use OrangeHRM\Entity\Holiday;
 use OrangeHRM\Entity\Location;
 use OrangeHRM\Leave\Api\Model\HolidayModel;
@@ -222,15 +221,20 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     {
         $query = RequestParams::PARAM_TYPE_QUERY;
         $empNumber = $this->getRequestParams()->getIntOrNull($query, self::FILTER_EMP_NUMBER);
+        $noEmployeeUser = false;
         if ($empNumber === null
             && $this->getRequestParams()->getBoolean($query, self::FILTER_CURRENT_EMPLOYEE)) {
             $empNumber = $this->getAuthUser()->getEmpNumber();
+            $noEmployeeUser = $empNumber === null;
         } elseif ($empNumber !== null
-            && !$this->getUserRoleManager()->isEntityAccessible(Employee::class, $empNumber)) {
+            && !$this->getUserRoleManagerHelper()->isEmployeeAccessible($empNumber)) {
             throw $this->getForbiddenException();
         }
 
-        if ($empNumber !== null) {
+        if ($noEmployeeUser) {
+            // A user without an employee record has no location: org-wide holidays only
+            $filterParams->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE);
+        } elseif ($empNumber !== null) {
             $locationId = $this->getHolidayService()->getEmployeeLocationId($empNumber);
             // An employee without a location sees org-wide holidays only
             $filterParams->setLocationFilter(

@@ -591,15 +591,14 @@ class HolidayAPITest extends EndpointTestCase
 
     public function testGetAllEffectiveForEmployee(): void
     {
-        $userRoleManager = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Manager\BasicUserRoleManager::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['isEntityAccessible'])
+        $userRoleManager = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Helper\UserRoleManagerHelper::class)
+            ->onlyMethods(['isEmployeeAccessible'])
             ->getMock();
-        $userRoleManager->expects($this->once())->method('isEntityAccessible')
-            ->with(\OrangeHRM\Entity\Employee::class, 1)->willReturn(true);
+        $userRoleManager->expects($this->once())->method('isEmployeeAccessible')
+            ->with(1)->willReturn(true);
         $this->getAllWith(
             [HolidayAPI::FILTER_EMP_NUMBER => 1],
-            ['getUserRoleManager' => $userRoleManager],
+            ['getUserRoleManagerHelper' => $userRoleManager],
             function (HolidaySearchFilterParams $p) {
                 $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, $p->getLocationFilter());
                 $this->assertEquals(1, $p->getLocationId());
@@ -609,21 +608,52 @@ class HolidayAPITest extends EndpointTestCase
 
     public function testGetAllForInaccessibleEmployeeForbidden(): void
     {
-        $userRoleManager = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Manager\BasicUserRoleManager::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['isEntityAccessible'])
+        $userRoleManager = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Helper\UserRoleManagerHelper::class)
+            ->onlyMethods(['isEmployeeAccessible'])
             ->getMock();
-        $userRoleManager->method('isEntityAccessible')->willReturn(false);
+        $userRoleManager->method('isEmployeeAccessible')->willReturn(false);
         $service = $this->getMockBuilder(HolidayService::class)->onlyMethods(['searchHolidays'])->getMock();
         $service->expects($this->never())->method('searchHolidays');
         $api = $this->getLocationApi(
             [],
             $service,
             [HolidayAPI::FILTER_EMP_NUMBER => 5],
-            ['getUserRoleManager' => $userRoleManager]
+            ['getUserRoleManagerHelper' => $userRoleManager]
         );
         $this->expectForbiddenException();
         $api->getAll();
+    }
+
+    public function testGetAllSelfEmpNumberAllowedViaHelper(): void
+    {
+        // The helper (entity access OR self) is what lets ESS users query their own empNumber
+        $helper = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Helper\UserRoleManagerHelper::class)
+            ->onlyMethods(['isEmployeeAccessible'])
+            ->getMock();
+        $helper->expects($this->once())->method('isEmployeeAccessible')->with(7)->willReturn(true);
+        $this->getAllWith(
+            [HolidayAPI::FILTER_EMP_NUMBER => 7],
+            ['getUserRoleManagerHelper' => $helper],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, $p->getLocationFilter());
+            }
+        );
+    }
+
+    public function testGetAllCurrentEmployeeWithoutEmployeeRecordIsOrgWide(): void
+    {
+        $authUser = $this->getMockBuilder(\OrangeHRM\Authentication\Auth\User::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getEmpNumber'])
+            ->getMock();
+        $authUser->method('getEmpNumber')->willReturn(null);
+        $this->getAllWith(
+            [HolidayAPI::FILTER_CURRENT_EMPLOYEE => 'true'],
+            ['getAuthUser' => $authUser],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE, $p->getLocationFilter());
+            }
+        );
     }
 
     public function testGetAllNoFiltersUnchanged(): void
