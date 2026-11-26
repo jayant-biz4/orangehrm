@@ -1,0 +1,5 @@
+Country:
+  - { cou_code: 'LK', name: 'Sri Lanka' }
+
+Location:
+  - { id: 1, name: 'Colombo Office', country_code: 'LK' }

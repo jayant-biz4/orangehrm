@@ -19,12 +19,15 @@
 
 namespace OrangeHRM\Entity\Decorator;
 
+use OrangeHRM\Core\Traits\ORM\EntityManagerHelperTrait;
 use OrangeHRM\Core\Traits\Service\DateTimeHelperTrait;
 use OrangeHRM\Entity\Holiday;
+use OrangeHRM\Entity\Location;
 
 class HolidayDecorator
 {
     use DateTimeHelperTrait;
+    use EntityManagerHelperTrait;
 
     /**
      * @var Holiday
@@ -62,5 +65,35 @@ class HolidayDecorator
     public function getLengthName(): ?string
     {
         return Holiday::HOLIDAY_LENGTH_MAP[$this->getHoliday()->getLength()] ?? null;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isOrgWide(): bool
+    {
+        return $this->getHoliday()->getLocation() === null;
+    }
+
+    /**
+     * @param int|null $id
+     */
+    public function setLocationById(?int $id): void
+    {
+        /** @var Location|null $location */
+        $location = is_null($id) ? null : $this->getReference(Location::class, $id);
+        $this->getHoliday()->setLocation($location);
+    }
+
+    /**
+     * @return array{id: int, name: string}|null
+     */
+    public function getLocationArray(): ?array
+    {
+        $location = $this->getHoliday()->getLocation();
+        if ($location === null) {
+            return null;
+        }
+        return ['id' => $location->getId(), 'name' => $location->getName()];
     }
 }

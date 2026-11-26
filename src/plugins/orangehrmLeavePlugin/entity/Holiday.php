@@ -91,6 +91,14 @@ class Holiday
     private ?OperationalCountry $operationalCountry = null;
 
     /**
+     * @var Location|null
+     *
+     * @ORM\ManyToOne(targetEntity="OrangeHRM\Entity\Location")
+     * @ORM\JoinColumn(name="location_id", referencedColumnName="id", nullable=true)
+     */
+    private ?Location $location = null;
+
+    /**
      * @return int
      */
     public function getId(): int
@@ -184,5 +192,21 @@ class Holiday
     public function setOperationalCountry(?OperationalCountry $operationalCountry): void
     {
         $this->operationalCountry = $operationalCountry;
+    }
+
+    /**
+     * @return Location|null
+     */
+    public function getLocation(): ?Location
+    {
+        return $this->location;
+    }
+
+    /**
+     * @param Location|null $location
+     */
+    public function setLocation(?Location $location): void
+    {
+        $this->location = $location;
     }
 }
