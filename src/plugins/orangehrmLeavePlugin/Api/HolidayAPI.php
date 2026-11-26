@@ -33,7 +33,11 @@ use OrangeHRM\Core\Api\V2\Validator\ParamRule;
 use OrangeHRM\Core\Api\V2\Validator\ParamRuleCollection;
 use OrangeHRM\Core\Api\V2\Validator\Rule;
 use OrangeHRM\Core\Api\V2\Validator\Rules;
+use OrangeHRM\Core\Traits\Auth\AuthUserTrait;
+use OrangeHRM\Core\Traits\UserRoleManagerTrait;
+use OrangeHRM\Entity\Employee;
 use OrangeHRM\Entity\Holiday;
+use OrangeHRM\Entity\Location;
 use OrangeHRM\Leave\Api\Model\HolidayModel;
 use OrangeHRM\Leave\Dto\HolidaySearchFilterParams;
 use OrangeHRM\Leave\Traits\Service\HolidayServiceTrait;
@@ -41,14 +45,21 @@ use OrangeHRM\Leave\Traits\Service\HolidayServiceTrait;
 class HolidayAPI extends Endpoint implements CrudEndpoint
 {
     use HolidayServiceTrait;
+    use UserRoleManagerTrait;
+    use AuthUserTrait;
 
     public const PARAMETER_NAME = 'name';
     public const PARAMETER_DATE = 'date';
     public const PARAMETER_RECURRING = 'recurring';
     public const PARAMETER_LENGTH = 'length';
+    public const PARAMETER_LOCATION_ID = 'locationId';
 
     public const FILTER_FROM_DATE = 'fromDate';
     public const FILTER_TO_DATE = 'toDate';
+    public const FILTER_LOCATION_ID = 'locationId';
+    public const FILTER_ORG_WIDE_ONLY = 'orgWideOnly';
+    public const FILTER_EMP_NUMBER = 'empNumber';
+    public const FILTER_CURRENT_EMPLOYEE = 'currentEmployee';
 
     public const PARAM_RULE_NAME_MAX_LENGTH = 200;
 
@@ -129,6 +140,34 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
      *         @OA\Schema(type="number")
      *     ),
      *     @OA\Parameter(
+     *         name="locationId",
+     *         in="query",
+     *         required=false,
+     *         description="Only holidays of this location",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="orgWideOnly",
+     *         in="query",
+     *         required=false,
+     *         description="Only organization-wide holidays",
+     *         @OA\Schema(type="boolean")
+     *     ),
+     *     @OA\Parameter(
+     *         name="empNumber",
+     *         in="query",
+     *         required=false,
+     *         description="Holidays effective for this employee (org-wide + employee's location)",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Parameter(
+     *         name="currentEmployee",
+     *         in="query",
+     *         required=false,
+     *         description="Holidays effective for the logged-in employee",
+     *         @OA\Schema(type="boolean")
+     *     ),
+     *     @OA\Parameter(
      *         name="sortField",
      *         in="query",
      *         required=false,
@@ -165,6 +204,7 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
         $this->setSortingAndPaginationParams($holidaySearchFilterParams);
         $holidaySearchFilterParams->setFromDate($fromDate);
         $holidaySearchFilterParams->setToDate($toDate);
+        $this->setLocationFilter($holidaySearchFilterParams);
         $holidays = $this->getHolidayService()->searchHolidays($holidaySearchFilterParams);
         $total = $this->getHolidayService()->searchHolidaysCount($holidaySearchFilterParams);
 
@@ -176,6 +216,40 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     }
 
     /**
+     * Precedence: empNumber > currentEmployee > orgWideOnly > locationId
+     */
+    private function setLocationFilter(HolidaySearchFilterParams $filterParams): void
+    {
+        $query = RequestParams::PARAM_TYPE_QUERY;
+        $empNumber = $this->getRequestParams()->getIntOrNull($query, self::FILTER_EMP_NUMBER);
+        if ($empNumber === null
+            && $this->getRequestParams()->getBoolean($query, self::FILTER_CURRENT_EMPLOYEE)) {
+            $empNumber = $this->getAuthUser()->getEmpNumber();
+        } elseif ($empNumber !== null
+            && !$this->getUserRoleManager()->isEntityAccessible(Employee::class, $empNumber)) {
+            throw $this->getForbiddenException();
+        }
+
+        if ($empNumber !== null) {
+            $locationId = $this->getHolidayService()->getEmployeeLocationId($empNumber);
+            // An employee without a location sees org-wide holidays only
+            $filterParams->setLocationFilter(
+                $locationId === null
+                    ? HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE
+                    : HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE,
+                $locationId
+            );
+        } elseif ($this->getRequestParams()->getBoolean($query, self::FILTER_ORG_WIDE_ONLY)) {
+            $filterParams->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE);
+        } else {
+            $locationId = $this->getRequestParams()->getIntOrNull($query, self::FILTER_LOCATION_ID);
+            if ($locationId !== null) {
+                $filterParams->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_LOCATION, $locationId);
+            }
+        }
+    }
+
+    /**
      * @inheritDoc
      */
     public function getValidationRuleForGetAll(): ParamRuleCollection
@@ -183,6 +257,14 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
         return new ParamRuleCollection(
             new ParamRule(self::FILTER_FROM_DATE, new Rule(Rules::API_DATE)),
             new ParamRule(self::FILTER_TO_DATE, new Rule(Rules::API_DATE)),
+            $this->getValidationDecorator()->notRequiredParamRule(
+                new ParamRule(self::FILTER_LOCATION_ID, new Rule(Rules::POSITIVE))
+            ),
+            new ParamRule(self::FILTER_ORG_WIDE_ONLY, new Rule(Rules::BOOL_VAL)),
+            $this->getValidationDecorator()->notRequiredParamRule(
+                new ParamRule(self::FILTER_EMP_NUMBER, new Rule(Rules::POSITIVE))
+            ),
+            new ParamRule(self::FILTER_CURRENT_EMPLOYEE, new Rule(Rules::BOOL_VAL)),
             ...$this->getSortingAndPaginationParamsRules()
         );
     }
@@ -208,6 +290,12 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
      *                 type="string",
      *                 maxLength=OrangeHRM\Leave\Api\HolidayAPI::PARAM_RULE_NAME_MAX_LENGTH
      *             ),
+     *             @OA\Property(
+     *                 property="locationId",
+     *                 type="integer",
+     *                 nullable=true,
+     *                 description="Location id; null/absent on create = organization-wide. On update, absent = unchanged, null = organization-wide"
+     *             ),
      *             @OA\Property(property="recurring", type="boolean"),
      *             required={"name", "date"}
      *         )
@@ -230,6 +318,7 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     {
         $holiday = new Holiday();
         $this->setHolidayParams($holiday);
+        $this->validateHoliday($holiday);
         $this->getHolidayService()->saveHoliday($holiday);
         return new EndpointResourceResult(HolidayModel::class, $holiday);
     }
@@ -237,8 +326,25 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     /**
      * @param Holiday $holiday
      */
-    private function setHolidayParams(Holiday $holiday): void
+    private function validateHoliday(Holiday $holiday): void
     {
+        $reason = $this->getHolidayService()->validateHoliday($holiday);
+        if ($reason !== null) {
+            throw $this->getInvalidParamException(self::PARAMETER_DATE, $reason);
+        }
+    }
+
+    /**
+     * @param Holiday $holiday
+     * @param bool $isCreate
+     */
+    private function setHolidayParams(Holiday $holiday, bool $isCreate = true): void
+    {
+        if ($isCreate || $this->getRequestParams()->has(RequestParams::PARAM_TYPE_BODY, self::PARAMETER_LOCATION_ID)) {
+            $holiday->getDecorator()->setLocationById(
+                $this->getRequestParams()->getIntOrNull(RequestParams::PARAM_TYPE_BODY, self::PARAMETER_LOCATION_ID)
+            );
+        }
         $holiday->setName(
             $this->getRequestParams()->getString(RequestParams::PARAM_TYPE_BODY, self::PARAMETER_NAME)
         );
@@ -263,6 +369,9 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     private function getCommonBodyParamRuleCollection(): ParamRuleCollection
     {
         return new ParamRuleCollection(
+            $this->getValidationDecorator()->notRequiredParamRule(
+                new ParamRule(self::PARAMETER_LOCATION_ID, new Rule(Rules::ENTITY_ID_EXISTS, [Location::class]))
+            ),
             $this->getValidationDecorator()->requiredParamRule(
                 new ParamRule(
                     self::PARAMETER_NAME,
@@ -305,6 +414,12 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
      *                 description="0 - working day, 4 - half day"
      *             ),
      *             @OA\Property(property="name", type="string"),
+     *             @OA\Property(
+     *                 property="locationId",
+     *                 type="integer",
+     *                 nullable=true,
+     *                 description="Location id; null/absent on create = organization-wide. On update, absent = unchanged, null = organization-wide"
+     *             ),
      *             @OA\Property(property="recurring", type="boolean"),
      *         )
      *     ),
@@ -329,7 +444,8 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
         $holiday = $this->getHolidayService()->getHolidayDao()->getHolidayById($id);
         $this->throwRecordNotFoundExceptionIfNotExist($holiday, Holiday::class);
 
-        $this->setHolidayParams($holiday);
+        $this->setHolidayParams($holiday, false);
+        $this->validateHoliday($holiday);
         $this->getHolidayService()->saveHoliday($holiday);
         return new EndpointResourceResult(HolidayModel::class, $holiday);
     }

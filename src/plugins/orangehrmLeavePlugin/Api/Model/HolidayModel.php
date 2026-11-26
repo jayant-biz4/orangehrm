@@ -32,12 +32,22 @@ use OrangeHRM\Entity\Holiday;
  *     @OA\Property(property="date", type="string", format="date"),
  *     @OA\Property(property="recurring", type="boolean"),
  *     @OA\Property(property="length", type="string", enum={ 0, 4}),
- *     @OA\Property(property="lengthName", type="string", enum={ "Full Day", "Half Day"})
+ *     @OA\Property(property="lengthName", type="string", enum={ "Full Day", "Half Day"}),
+ *     @OA\Property(
+ *         property="location",
+ *         type="object",
+ *         nullable=true,
+ *         description="null = organization-wide",
+ *         @OA\Property(property="id", type="integer"),
+ *         @OA\Property(property="name", type="string")
+ *     )
  * )
  */
 class HolidayModel implements Normalizable
 {
-    use ModelTrait;
+    use ModelTrait {
+        toArray as private baseToArray;
+    }
 
     public function __construct(Holiday $holiday)
     {
@@ -62,5 +72,17 @@ class HolidayModel implements Normalizable
                 'lengthName',
             ]
         );
+    }
+
+    /**
+     * Location is a nested {id, name} object (or null), which the generic filter mechanism
+     * would treat as a collection, so it is appended here.
+     * @inheritDoc
+     */
+    public function toArray(): array
+    {
+        $array = $this->baseToArray();
+        $array['location'] = $this->getEntity()->getDecorator()->getLocationArray();
+        return $array;
     }
 }

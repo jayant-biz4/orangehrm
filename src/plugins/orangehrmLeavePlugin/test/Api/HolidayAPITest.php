@@ -28,6 +28,7 @@ use OrangeHRM\Entity\Holiday;
 use OrangeHRM\Framework\Services;
 use OrangeHRM\Leave\Api\HolidayAPI;
 use OrangeHRM\Leave\Dao\HolidayDao;
+use OrangeHRM\Leave\Dto\HolidaySearchFilterParams;
 use OrangeHRM\Leave\Service\HolidayService;
 use OrangeHRM\Tests\Util\EndpointTestCase;
 use OrangeHRM\Tests\Util\MockObject;
@@ -101,7 +102,8 @@ class HolidayAPITest extends EndpointTestCase
                 "date" => "2021-12-25",
                 "recurring" => true,
                 "length" => 0,
-                "lengthName" => "Full Day"
+                "lengthName" => "Full Day",
+                "location" => null
             ],
             $result->normalize()
         );
@@ -148,11 +150,13 @@ class HolidayAPITest extends EndpointTestCase
             );
 
         $holidayService = $this->getMockBuilder(HolidayService::class)
-            ->onlyMethods(['getHolidayDao', 'getCache'])
+            ->onlyMethods(['getHolidayDao', 'getCache', 'validateHoliday'])
             ->getMock();
 
         $holidayService->expects($this->exactly(1))
             ->method('getCache');
+
+        $holidayService->method('validateHoliday')->willReturn(null);
 
         $holidayService->expects($this->exactly(2))
             ->method('getHolidayDao')
@@ -180,7 +184,7 @@ class HolidayAPITest extends EndpointTestCase
             ]
         )->onlyMethods(['getHolidayService'])
             ->getMock();
-        $api->expects($this->exactly(2))
+        $api->expects($this->exactly(3))
             ->method('getHolidayService')
             ->will($this->returnValue($holidayService));
 
@@ -192,7 +196,8 @@ class HolidayAPITest extends EndpointTestCase
                 "date" => "2021-12-25",
                 "recurring" => true,
                 "length" => 0,
-                "lengthName" => "Full Day"
+                "lengthName" => "Full Day",
+                "location" => null
             ],
             $result->normalize()
         );
@@ -304,8 +309,10 @@ class HolidayAPITest extends EndpointTestCase
             );
 
         $holidayService = $this->getMockBuilder(HolidayService::class)
-            ->onlyMethods(['getHolidayDao', 'getCache'])
+            ->onlyMethods(['getHolidayDao', 'getCache', 'validateHoliday'])
             ->getMock();
+
+        $holidayService->method('validateHoliday')->willReturn(null);
 
         $holidayService->expects($this->once())
             ->method('getHolidayDao')
@@ -335,7 +342,7 @@ class HolidayAPITest extends EndpointTestCase
             ]
         )->onlyMethods(['getHolidayService'])
             ->getMock();
-        $api->expects($this->once())
+        $api->expects($this->exactly(2))
             ->method('getHolidayService')
             ->will($this->returnValue($holidayService));
 
@@ -347,7 +354,8 @@ class HolidayAPITest extends EndpointTestCase
                 "date" => "2021-12-25",
                 "recurring" => true,
                 "length" => 0,
-                "lengthName" => "Full Day"
+                "lengthName" => "Full Day",
+                "location" => null
             ],
             $result->normalize()
         );
@@ -428,7 +436,8 @@ class HolidayAPITest extends EndpointTestCase
                     "length" => 0,
                     "recurring" => true,
                     "date" => "2021-12-25",
-                    'lengthName' => 'Full Day'
+                    'lengthName' => 'Full Day',
+                    'location' => null
                 ],
                 [
                     "id" => 2,
@@ -436,10 +445,214 @@ class HolidayAPITest extends EndpointTestCase
                     "length" => 4,
                     "recurring" => false,
                     "date" => "2021-08-21",
-                    'lengthName' => 'Half Day'
+                    'lengthName' => 'Half Day',
+                    'location' => null
                 ]
             ],
             $result->normalize()
+        );
+    }
+
+    private function createLocationServiceMock(?string $validation, array $methods = [])
+    {
+        $holidayDao = $this->getMockBuilder(HolidayDao::class)
+            ->onlyMethods(['saveHoliday', 'getHolidayById'])
+            ->getMock();
+        $holidayDao->method('saveHoliday')->willReturnCallback(
+            function (Holiday $holiday) {
+                $holiday->setId(1);
+                return $holiday;
+            }
+        );
+        $holiday = new Holiday();
+        $holiday->setId(1);
+        $holiday->setRecurring(false);
+        $holiday->setName('Colombo Day');
+        $holiday->setDate(new DateTime('2021-09-10'));
+        $holiday->setLength(0);
+        $holiday->getDecorator()->setLocationById(1);
+        $holidayDao->method('getHolidayById')->willReturn($holiday);
+
+        $holidayService = $this->getMockBuilder(HolidayService::class)
+            ->onlyMethods(array_merge(['getHolidayDao', 'getCache', 'validateHoliday'], $methods))
+            ->getMock();
+        $holidayService->method('getHolidayDao')->willReturn($holidayDao);
+        $holidayService->method('validateHoliday')->willReturn($validation);
+        return $holidayService;
+    }
+
+    private function getLocationApi(array $body, $service, array $query = [], array $extra = [])
+    {
+        $this->createKernelWithMockServices([Services::DATETIME_HELPER_SERVICE => new DateTimeHelperService()]);
+        $api = $this->getApiEndpointMockBuilder(
+            HolidayAPI::class,
+            [
+                RequestParams::PARAM_TYPE_ATTRIBUTE => [CommonParams::PARAMETER_ID => 1],
+                RequestParams::PARAM_TYPE_BODY => $body,
+                RequestParams::PARAM_TYPE_QUERY => array_merge(
+                    [HolidayAPI::FILTER_FROM_DATE => '2021-01-01', HolidayAPI::FILTER_TO_DATE => '2021-12-31'],
+                    $query
+                ),
+            ]
+        )->onlyMethods(array_merge(['getHolidayService'], array_keys($extra)))
+            ->getMock();
+        $api->method('getHolidayService')->willReturn($service);
+        foreach ($extra as $method => $value) {
+            $api->method($method)->willReturn($value);
+        }
+        return $api;
+    }
+
+    private function baseBody(array $more = []): array
+    {
+        return array_merge(
+            [
+                HolidayAPI::PARAMETER_NAME => 'Colombo Day',
+                HolidayAPI::PARAMETER_DATE => '2021-09-10',
+                HolidayAPI::PARAMETER_LENGTH => 0,
+                HolidayAPI::PARAMETER_RECURRING => false,
+            ],
+            $more
+        );
+    }
+
+    public function testCreateLocationHoliday(): void
+    {
+        $this->loadFixtures();
+        $api = $this->getLocationApi(
+            $this->baseBody([HolidayAPI::PARAMETER_LOCATION_ID => 1]),
+            $this->createLocationServiceMock(null)
+        );
+        $result = $api->create()->normalize();
+        $this->assertEquals(['id' => 1, 'name' => 'Colombo'], $result['location']);
+    }
+
+    public function testCreateWithoutLocationIdIsOrgWide(): void
+    {
+        $this->loadFixtures();
+        $api = $this->getLocationApi($this->baseBody(), $this->createLocationServiceMock(null));
+        $this->assertNull($api->create()->normalize()['location']);
+    }
+
+    public function testCreateClashReturnsInvalidParam(): void
+    {
+        $this->loadFixtures();
+        $api = $this->getLocationApi($this->baseBody(), $this->createLocationServiceMock(HolidayService::VALIDATION_CLASH));
+        $this->expectInvalidParamException();
+        $api->create();
+    }
+
+    public function testUpdateWithoutLocationIdKeepsLocation(): void
+    {
+        $this->loadFixtures();
+        $api = $this->getLocationApi($this->baseBody(), $this->createLocationServiceMock(null));
+        $this->assertEquals(['id' => 1, 'name' => 'Colombo'], $api->update()->normalize()['location']);
+    }
+
+    public function testUpdateWithNullLocationIdMakesOrgWide(): void
+    {
+        $this->loadFixtures();
+        $api = $this->getLocationApi(
+            $this->baseBody([HolidayAPI::PARAMETER_LOCATION_ID => null]),
+            $this->createLocationServiceMock(null)
+        );
+        $this->assertNull($api->update()->normalize()['location']);
+    }
+
+    public function testGetValidationRuleForCreateRejectsUnknownLocation(): void
+    {
+        $this->loadFixtures();
+        $api = new HolidayAPI($this->getRequest());
+        $rules = $api->getValidationRuleForCreate();
+        $this->assertTrue($this->validate($this->baseBody([HolidayAPI::PARAMETER_LOCATION_ID => 1]), $rules));
+        $this->assertTrue($this->validate($this->baseBody([HolidayAPI::PARAMETER_LOCATION_ID => null]), $rules));
+        $this->expectException(\OrangeHRM\Core\Api\V2\Exception\InvalidParamException::class);
+        $this->validate($this->baseBody([HolidayAPI::PARAMETER_LOCATION_ID => 999]), $rules);
+    }
+
+    private function getAllWith(array $query, array $extra, callable $expectFilter, $service = null): array
+    {
+        $service ??= $this->getMockBuilder(HolidayService::class)
+            ->onlyMethods(['searchHolidays', 'searchHolidaysCount', 'getEmployeeLocationId'])
+            ->getMock();
+        $service->method('getEmployeeLocationId')->willReturn(1);
+        $service->method('searchHolidaysCount')->willReturn(0);
+        $service->expects($this->once())->method('searchHolidays')->with(
+            $this->callback(
+                function (HolidaySearchFilterParams $p) use ($expectFilter) {
+                    $expectFilter($p);
+                    return true;
+                }
+            )
+        )->willReturn([]);
+        $api = $this->getLocationApi([], $service, $query, $extra);
+        return $api->getAll()->normalize();
+    }
+
+    public function testGetAllEffectiveForEmployee(): void
+    {
+        $userRoleManager = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Manager\BasicUserRoleManager::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['isEntityAccessible'])
+            ->getMock();
+        $userRoleManager->expects($this->once())->method('isEntityAccessible')
+            ->with(\OrangeHRM\Entity\Employee::class, 1)->willReturn(true);
+        $this->getAllWith(
+            [HolidayAPI::FILTER_EMP_NUMBER => 1],
+            ['getUserRoleManager' => $userRoleManager],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, $p->getLocationFilter());
+                $this->assertEquals(1, $p->getLocationId());
+            }
+        );
+    }
+
+    public function testGetAllForInaccessibleEmployeeForbidden(): void
+    {
+        $userRoleManager = $this->getMockBuilder(\OrangeHRM\Core\Authorization\Manager\BasicUserRoleManager::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['isEntityAccessible'])
+            ->getMock();
+        $userRoleManager->method('isEntityAccessible')->willReturn(false);
+        $service = $this->getMockBuilder(HolidayService::class)->onlyMethods(['searchHolidays'])->getMock();
+        $service->expects($this->never())->method('searchHolidays');
+        $api = $this->getLocationApi(
+            [],
+            $service,
+            [HolidayAPI::FILTER_EMP_NUMBER => 5],
+            ['getUserRoleManager' => $userRoleManager]
+        );
+        $this->expectForbiddenException();
+        $api->getAll();
+    }
+
+    public function testGetAllNoFiltersUnchanged(): void
+    {
+        $this->getAllWith(
+            [],
+            [],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertNull($p->getLocationFilter());
+            }
+        );
+    }
+
+    public function testGetAllOrgWideOnlyAndLocationId(): void
+    {
+        $this->getAllWith(
+            [HolidayAPI::FILTER_ORG_WIDE_ONLY => 'true', HolidayAPI::FILTER_LOCATION_ID => 2],
+            [],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_ORG_WIDE, $p->getLocationFilter());
+            }
+        );
+        $this->getAllWith(
+            [HolidayAPI::FILTER_LOCATION_ID => 2],
+            [],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_LOCATION, $p->getLocationFilter());
+                $this->assertEquals(2, $p->getLocationId());
+            }
         );
     }
 
