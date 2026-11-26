@@ -80,6 +80,8 @@ class HolidayDao extends BaseDao
         HolidaySearchFilterParams $holidaySearchFilterParams
     ): Paginator {
         $q = $this->createQueryBuilder(Holiday::class, 'holiday');
+        // Fetch-joined so cached (serialised) holidays carry an initialised location, not a proxy
+        $q->leftJoin('holiday.location', 'location')->addSelect('location');
         $this->setSortingParams($q, $holidaySearchFilterParams);
         $q->andWhere($q->expr()->between('holiday.date', ':fromDate', ':toDate'))
             ->setParameter('fromDate', $holidaySearchFilterParams->getFromDate())

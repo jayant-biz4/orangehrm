@@ -25,6 +25,7 @@ use OrangeHRM\Entity\Holiday;
 use OrangeHRM\Framework\Cache\FilesystemAdapter;
 use OrangeHRM\Framework\Services;
 use OrangeHRM\Leave\Dao\HolidayDao;
+use OrangeHRM\Leave\Api\Model\HolidayModel;
 use OrangeHRM\Leave\Dto\HolidaySearchFilterParams;
 use OrangeHRM\Leave\Service\HolidayService;
 use OrangeHRM\ORM\Doctrine;
@@ -190,6 +191,26 @@ class HolidayServiceTest extends KernelTestCase
         };
         $this->assertSame([6], $search(1));
         $this->assertSame([7], $search(2));
+    }
+
+    public function testCachedLocationHolidayNormalizesAfterCacheRoundTrip(): void
+    {
+        TestDataService::populate($this->fixture);
+        $search = function (): array {
+            $params = new HolidaySearchFilterParams();
+            $params->setFromDate(new DateTime('2021-08-01'));
+            $params->setToDate(new DateTime('2021-08-31'));
+            $params->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, 1);
+            return $this->holidayService->searchHolidays($params);
+        };
+        $search(); // fills the cache
+        Doctrine::getEntityManager()->clear();
+        $holidays = $search(); // served from the serialised cache
+        $this->assertCount(1, $holidays);
+        $this->assertEquals(
+            ['id' => 1, 'name' => 'Colombo'],
+            (new HolidayModel($holidays[0]))->toArray()['location']
+        );
     }
 
     public function testSearchHolidaysNoneRecurring(): void
