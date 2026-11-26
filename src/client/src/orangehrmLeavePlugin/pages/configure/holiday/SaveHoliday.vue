@@ -213,7 +213,8 @@ export default {
             } else {
               resolve(true);
             }
-          });
+          })
+          .catch(() => resolve(true));
       });
     },
     revalidateDate() {

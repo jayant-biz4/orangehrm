@@ -186,10 +186,10 @@ export default {
 
   watch: {
     'holiday.location'() {
-      this.revalidateDate();
+      if (!this.isLoading) this.revalidateDate();
     },
     'holiday.recurring'() {
-      this.revalidateDate();
+      if (!this.isLoading) this.revalidateDate();
     },
   },
   created() {
@@ -240,7 +240,8 @@ export default {
             } else {
               resolve(true);
             }
-          });
+          })
+          .catch(() => resolve(true));
       });
     },
     revalidateDate() {
