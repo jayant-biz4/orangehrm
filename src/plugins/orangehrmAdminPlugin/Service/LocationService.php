@@ -22,9 +22,11 @@ namespace OrangeHRM\Admin\Service;
 use OrangeHRM\Admin\Dao\LocationDao;
 use OrangeHRM\Admin\Dto\LocationSearchFilterParams;
 use OrangeHRM\Admin\Service\Model\LocationModel;
+use OrangeHRM\Core\Traits\CacheTrait;
 use OrangeHRM\Core\Traits\Service\NormalizerServiceTrait;
 use OrangeHRM\Core\Traits\UserRoleManagerTrait;
 use OrangeHRM\Entity\Location;
+use OrangeHRM\Leave\Service\HolidayService;
 use OrangeHRM\Pim\Traits\Service\EmployeeServiceTrait;
 
 class LocationService
@@ -32,6 +34,7 @@ class LocationService
     use UserRoleManagerTrait;
     use NormalizerServiceTrait;
     use EmployeeServiceTrait;
+    use CacheTrait;
 
     /**
      * @var LocationDao|null
@@ -160,7 +163,10 @@ class LocationService
      */
     public function deleteLocations(array $ids): int
     {
-        return $this->getLocationDao()->deleteLocations($ids);
+        $deleted = $this->getLocationDao()->deleteLocations($ids);
+        // Holidays of the deleted locations are removed by the FK cascade
+        $this->getCache()->clear(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX);
+        return $deleted;
     }
 
     /**

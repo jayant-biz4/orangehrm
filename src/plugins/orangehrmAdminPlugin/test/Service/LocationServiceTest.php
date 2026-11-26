@@ -25,7 +25,12 @@ use OrangeHRM\Config\Config;
 use OrangeHRM\Core\Authorization\Manager\BasicUserRoleManager;
 use OrangeHRM\Core\Service\NormalizerService;
 use OrangeHRM\Core\Traits\ServiceContainerTrait;
+use DateTime;
 use OrangeHRM\Entity\Employee;
+use OrangeHRM\Entity\Holiday;
+use OrangeHRM\Framework\Cache\FilesystemAdapter;
+use OrangeHRM\Leave\Service\HolidayService;
+use OrangeHRM\ORM\Doctrine;
 use OrangeHRM\Entity\Location;
 use OrangeHRM\Admin\Dto\LocationSearchFilterParams;
 use OrangeHRM\Framework\Services;
@@ -167,5 +172,30 @@ class LocationServiceTest extends KernelTestCase
         $this->assertCount(0, $locations);
         $locations = $this->locationService->getAccessibleLocationsArray(1);
         $this->assertCount(0, $locations);
+    }
+
+    public function testDeleteLocationsDeletesItsHolidays(): void
+    {
+        $em = Doctrine::getEntityManager();
+        $holiday = new Holiday();
+        $holiday->setName('Location holiday');
+        $holiday->setDate(new DateTime('2030-02-02'));
+        $holiday->setRecurring(false);
+        $holiday->setLength(0);
+        $holiday->getDecorator()->setLocationById(4);
+        $em->persist($holiday);
+        $em->flush();
+        $holidayId = $holiday->getId();
+
+        $cache = new FilesystemAdapter();
+        $cache->get(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX . '.test', fn () => 'stale');
+        $this->createKernelWithMockServices([Services::CACHE => $cache]);
+        $this->assertTrue($cache->getItem(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX . '.test')->isHit());
+
+        $this->locationService->deleteLocations([4]);
+
+        $em->clear();
+        $this->assertNull($em->getRepository(Holiday::class)->find($holidayId));
+        $this->assertFalse($cache->getItem(HolidayService::LEAVE_HOLIDAYS_CACHE_KEY_PREFIX . '.test')->isHit());
     }
 }
