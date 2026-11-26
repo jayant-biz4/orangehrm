@@ -25,6 +25,7 @@ use OrangeHRM\Admin\Service\CountryService;
 use OrangeHRM\Admin\Service\LocationService;
 use OrangeHRM\Config\Config;
 use OrangeHRM\Core\Api\CommonParams;
+use OrangeHRM\Framework\Cache\FilesystemAdapter;
 use OrangeHRM\Framework\Services;
 use OrangeHRM\Tests\Util\EndpointTestCase;
 use OrangeHRM\Tests\Util\TestDataService;
@@ -46,6 +47,7 @@ class LocationAPITest extends EndpointTestCase
         $this->createKernelWithMockServices(
             [
                 Services::COUNTRY_SERVICE => new CountryService(),
+                Services::CACHE => new FilesystemAdapter(),
             ]
         );
     }
