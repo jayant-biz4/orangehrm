@@ -49,6 +49,29 @@ correct once the location filter is applied.
 Saving (including renaming) or deleting a location also clears the holiday cache, because cached
 holiday lists embed the location name.
 
+## Employee Holiday List and dashboard widget
+
+Read-only views for every user, so staff can see which holidays apply to them.
+
+- **Page.** Leave > Holiday List, route `/leave/holidayList` (`HolidayEmployeeListController`, Vue
+  `holiday-employee-list`). It opens on the signed-in employee's location
+  (`HolidayService::getLocationIdForUser`). A location picker switches to another location (that
+  location plus org-wide holidays, via `includeOrgWide=true`) or to "Org Wide Holidays" (org-wide
+  only, via `orgWideOnly=true`). Admin and ESS can read it.
+- **Menu and screen.** Screen `Holiday List` (module `leave`, url `holidayList`, Admin and ESS read)
+  and a Leave menu item `Holiday List` (level 2, `order_hint` 800, so it is last).
+- **Widget.** `UpcomingHolidaysWidget.vue` on the dashboard shows the next 5 holidays for the
+  employee, a `*` on a location holiday with a footnote naming the location, and a "View All" link
+  to the page. It is shown only with read access to the data group `dashboard_holiday_widget`
+  (Admin and ESS read), checked in `DashboardController`.
+- **Lang strings** (`leave.yaml`): `holiday_list`, `upcoming_holidays`, `no_upcoming_holidays`,
+  `applies_to`, `org_wide`, `view_all`, `day`, `holiday_for_location_only`.
+- **Seeding.** `SchemaUpdate::apply()` also seeds the screen and its role permissions
+  (`permission/screen.yaml`), the data group and its role permissions
+  (`permission/data_group.yaml`), the menu item (skipped if a `Holiday List` item already exists
+  under Leave) and the lang strings. Every step is idempotent, so the console command and the
+  upgrader can run any number of times.
+
 ## Deploy (in this order)
 
 1. **Pre-deploy check.** Run:
@@ -100,6 +123,24 @@ DELETE ap FROM ohrm_api_permission ap
 DELETE FROM ohrm_data_group WHERE name = 'apiv2_leave_holiday_date_validation';
 ```
 
+Rollback of the Holiday List screen, menu item and widget data group (run before the schema
+rollback or on its own):
+
+```sql
+DELETE mi FROM ohrm_menu_item mi
+  JOIN ohrm_screen s ON s.id = mi.screen_id
+  WHERE s.action_url = 'holidayList' AND mi.menu_title = 'Holiday List';
+DELETE urs FROM ohrm_user_role_screen urs
+  JOIN ohrm_screen s ON s.id = urs.screen_id
+  WHERE s.action_url = 'holidayList';
+DELETE FROM ohrm_screen WHERE action_url = 'holidayList';
+
+DELETE urdg FROM ohrm_user_role_data_group urdg
+  JOIN ohrm_data_group dg ON dg.id = urdg.data_group_id
+  WHERE dg.name = 'dashboard_holiday_widget';
+DELETE FROM ohrm_data_group WHERE name = 'dashboard_holiday_widget';
+```
+
 The lang strings may stay; they are unused. Then clear the cache (`php bin/console cache:clear`).
 
 ## API changes (`/api/v2/leave/holidays`)
@@ -111,6 +152,7 @@ The lang strings may stay; they are unused. Then clear the cache (`php bin/conso
 | GET list query | `orgWideOnly=true` | Only org-wide holidays. |
 | GET list query | `empNumber` | Holidays effective for that employee (org-wide plus own location). Must be accessible to the caller, else 403. |
 | GET list query | `currentEmployee=true` | Same as `empNumber`, for the signed-in user. |
+| GET list query | `includeOrgWide=true` | Used with `locationId`: that location's holidays plus the org-wide ones. Ignored by the other filters. Powers the Holiday List page. |
 | Response | `location: {id, name} \| null` | `null` = org-wide. |
 
 When several filters are sent: `empNumber` > `currentEmployee` > `orgWideOnly` > `locationId`. With
@@ -145,6 +187,11 @@ seeded there too.
 | `src/plugins/orangehrmAdminPlugin/Service/LocationService.php` | clear the holiday cache on location save and delete |
 | `src/client/src/core/components/inputs/DateInput.vue`, `core/util/helper/holidayQuery.ts` | shading per employee |
 | `src/client/src/orangehrmLeavePlugin/pages/configure/holiday/*`, `pages/LeaveAssign.vue` | location field, live validation |
+| `src/plugins/orangehrmLeavePlugin/Controller/HolidayEmployeeListController.php`, `config/routes.yaml` | Holiday List page |
+| `src/plugins/orangehrmLeavePlugin/Service/HolidayService.php` | `getLocationIdForUser` |
+| `src/plugins/orangehrmDashboardPlugin/Controller/DashboardController.php` | widget data group check |
+| `src/client/src/orangehrmLeavePlugin/pages/holiday/HolidayEmployeeList.vue`, `index.ts` | Holiday List page |
+| `src/client/src/orangehrmDashboardPlugin/components/UpcomingHolidaysWidget.vue`, `util/upcomingHolidays.ts`, `pages/ViewDashboard.vue` | dashboard widget |
 | `web/dist/*` | rebuilt frontend |
 | tests and fixtures under `orangehrmLeavePlugin/test` and `orangehrmAdminPlugin/test` | coverage |
 
