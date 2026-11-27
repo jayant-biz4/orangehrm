@@ -1,0 +1,6 @@
+"Holiday List":
+  module: leave
+  url: holidayList
+  permissions:
+    - { role: Admin, permission: { read: true } }
+    - { role: ESS, permission: { read: true, create: false, update: false, delete: false } }

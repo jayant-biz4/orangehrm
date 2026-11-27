@@ -11,3 +11,27 @@ langStrings:
   -
     value: 'Org Wide Holidays'
     unitId: org_wide_holidays
+  -
+    value: 'Holiday List'
+    unitId: holiday_list
+  -
+    value: 'Upcoming Holidays'
+    unitId: upcoming_holidays
+  -
+    value: 'No upcoming holidays'
+    unitId: no_upcoming_holidays
+  -
+    value: 'Applies To'
+    unitId: applies_to
+  -
+    value: 'Org Wide'
+    unitId: org_wide
+  -
+    value: 'View All'
+    unitId: view_all
+  -
+    value: 'Day'
+    unitId: day
+  -
+    value: 'Holiday for {location} only'
+    unitId: holiday_for_location_only

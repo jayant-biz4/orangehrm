@@ -40,6 +40,9 @@ class SchemaUpdate
     public const INDEX = 'holiday_location_id_date';
     public const FOREIGN_KEY = 'holiday_location_id';
     public const DATA_GROUP = 'apiv2_leave_holiday_date_validation';
+    public const SCREEN_URL = 'holidayList';
+    public const MENU_TITLE = 'Holiday List';
+    public const WIDGET_DATA_GROUP = 'dashboard_holiday_widget';
 
     private Connection $connection;
     private SchemaHelper $schemaHelper;
@@ -95,5 +98,88 @@ class SchemaUpdate
         if ($exists === false) {
             (new DataGroupHelper($this->connection))->insertApiPermissions(__DIR__ . '/permission/api.yaml');
         }
+
+        $leaveModuleId = $this->connection->createQueryBuilder()
+            ->select('module.id')
+            ->from('ohrm_module', 'module')
+            ->where('module.name = :name')
+            ->setParameter('name', 'leave')
+            ->executeQuery()
+            ->fetchOne();
+        $screenId = $this->findScreenId($leaveModuleId);
+        if ($screenId === false) {
+            (new DataGroupHelper($this->connection))->insertScreenPermissions(__DIR__ . '/permission/screen.yaml');
+            $screenId = $this->findScreenId($leaveModuleId);
+        }
+
+        $widgetExists = $this->connection->createQueryBuilder()
+            ->select('dataGroup.id')
+            ->from('ohrm_data_group', 'dataGroup')
+            ->where('dataGroup.name = :name')
+            ->setParameter('name', self::WIDGET_DATA_GROUP)
+            ->executeQuery()
+            ->fetchOne();
+        if ($widgetExists === false) {
+            (new DataGroupHelper($this->connection))->insertDataGroupPermissions(
+                __DIR__ . '/permission/data_group.yaml'
+            );
+        }
+
+        $leaveMenuId = $this->connection->createQueryBuilder()
+            ->select('menuItem.id')
+            ->from('ohrm_menu_item', 'menuItem')
+            ->where('menuItem.menu_title = :menuTitle')
+            ->setParameter('menuTitle', 'Leave')
+            ->andWhere('menuItem.level = :level')
+            ->setParameter('level', 1)
+            ->executeQuery()
+            ->fetchOne();
+        $menuExists = $this->connection->createQueryBuilder()
+            ->select('menuItem.id')
+            ->from('ohrm_menu_item', 'menuItem')
+            ->where('menuItem.menu_title = :menuTitle')
+            ->setParameter('menuTitle', self::MENU_TITLE)
+            ->andWhere('menuItem.parent_id = :parentId')
+            ->setParameter('parentId', $leaveMenuId)
+            ->executeQuery()
+            ->fetchOne();
+        if ($menuExists === false) {
+            $this->connection->createQueryBuilder()
+                ->insert('ohrm_menu_item')
+                ->values(
+                    [
+                        'menu_title' => ':menuTitle',
+                        'screen_id' => ':screenId',
+                        'parent_id' => ':parentId',
+                        'level' => ':level',
+                        'order_hint' => ':orderHint',
+                        'status' => ':status',
+                    ]
+                )
+                ->setParameter('menuTitle', self::MENU_TITLE)
+                ->setParameter('screenId', $screenId)
+                ->setParameter('parentId', $leaveMenuId)
+                ->setParameter('level', 2)
+                ->setParameter('orderHint', 800)
+                ->setParameter('status', 1)
+                ->executeStatement();
+        }
+    }
+
+    /**
+     * @param int|string $leaveModuleId
+     * @return int|string|false
+     */
+    private function findScreenId($leaveModuleId)
+    {
+        return $this->connection->createQueryBuilder()
+            ->select('screen.id')
+            ->from('ohrm_screen', 'screen')
+            ->where('screen.module_id = :moduleId')
+            ->setParameter('moduleId', $leaveModuleId)
+            ->andWhere('screen.action_url = :url')
+            ->setParameter('url', self::SCREEN_URL)
+            ->executeQuery()
+            ->fetchOne();
     }
 }
