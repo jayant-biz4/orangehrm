@@ -150,7 +150,7 @@ export default {
 
     const locationOptions = computed(() => [
       {id: 0, label: t('leave.all_locations')},
-      ...props.locations.map(({id, name}) => ({id, label: name})),
+      ...props.locations,
     ]);
 
     const serializedFilters = computed(() => {

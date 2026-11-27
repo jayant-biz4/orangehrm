@@ -179,7 +179,7 @@ export default {
     locationOptions() {
       return [
         {id: 0, label: this.$t('leave.all_locations')},
-        ...this.locations.map(({id, name}) => ({id, label: name})),
+        ...this.locations,
       ];
     },
   },
