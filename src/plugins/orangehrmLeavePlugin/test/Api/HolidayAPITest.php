@@ -570,6 +570,25 @@ class HolidayAPITest extends EndpointTestCase
         $this->validate($this->baseBody([HolidayAPI::PARAMETER_LOCATION_ID => 999]), $rules);
     }
 
+    public function testGetAllLocationIdIncludeOrgWide(): void
+    {
+        $this->getAllWith(
+            [HolidayAPI::FILTER_LOCATION_ID => 2, HolidayAPI::FILTER_INCLUDE_ORG_WIDE => 'true'],
+            [],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE, $p->getLocationFilter());
+                $this->assertEquals(2, $p->getLocationId());
+            }
+        );
+        $this->getAllWith(
+            [HolidayAPI::FILTER_LOCATION_ID => 2, HolidayAPI::FILTER_INCLUDE_ORG_WIDE => 'false'],
+            [],
+            function (HolidaySearchFilterParams $p) {
+                $this->assertEquals(HolidaySearchFilterParams::LOCATION_FILTER_LOCATION, $p->getLocationFilter());
+            }
+        );
+    }
+
     private function getAllWith(array $query, array $extra, callable $expectFilter, $service = null): array
     {
         $service ??= $this->getMockBuilder(HolidayService::class)
@@ -695,6 +714,17 @@ class HolidayAPITest extends EndpointTestCase
                 [
                     HolidayAPI::FILTER_FROM_DATE => '2021-01-01',
                     HolidayAPI::FILTER_TO_DATE => '2021-12-31',
+                ],
+                $rules
+            )
+        );
+        $this->assertTrue(
+            $this->validate(
+                [
+                    HolidayAPI::FILTER_FROM_DATE => '2021-01-01',
+                    HolidayAPI::FILTER_TO_DATE => '2021-12-31',
+                    HolidayAPI::FILTER_LOCATION_ID => 2,
+                    HolidayAPI::FILTER_INCLUDE_ORG_WIDE => true,
                 ],
                 $rules
             )

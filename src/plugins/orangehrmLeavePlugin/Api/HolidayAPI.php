@@ -57,6 +57,7 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     public const FILTER_TO_DATE = 'toDate';
     public const FILTER_LOCATION_ID = 'locationId';
     public const FILTER_ORG_WIDE_ONLY = 'orgWideOnly';
+    public const FILTER_INCLUDE_ORG_WIDE = 'includeOrgWide';
     public const FILTER_EMP_NUMBER = 'empNumber';
     public const FILTER_CURRENT_EMPLOYEE = 'currentEmployee';
 
@@ -153,6 +154,13 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
      *         @OA\Schema(type="boolean")
      *     ),
      *     @OA\Parameter(
+     *         name="includeOrgWide",
+     *         in="query",
+     *         required=false,
+     *         description="With locationId: also include organization-wide holidays",
+     *         @OA\Schema(type="boolean")
+     *     ),
+     *     @OA\Parameter(
      *         name="empNumber",
      *         in="query",
      *         required=false,
@@ -215,7 +223,7 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
     }
 
     /**
-     * Precedence: empNumber > currentEmployee > orgWideOnly > locationId
+     * Precedence: empNumber > currentEmployee > orgWideOnly > locationId (+ includeOrgWide)
      */
     private function setLocationFilter(HolidaySearchFilterParams $filterParams): void
     {
@@ -248,7 +256,12 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
         } else {
             $locationId = $this->getRequestParams()->getIntOrNull($query, self::FILTER_LOCATION_ID);
             if ($locationId !== null) {
-                $filterParams->setLocationFilter(HolidaySearchFilterParams::LOCATION_FILTER_LOCATION, $locationId);
+                $filterParams->setLocationFilter(
+                    $this->getRequestParams()->getBoolean($query, self::FILTER_INCLUDE_ORG_WIDE)
+                        ? HolidaySearchFilterParams::LOCATION_FILTER_EFFECTIVE
+                        : HolidaySearchFilterParams::LOCATION_FILTER_LOCATION,
+                    $locationId
+                );
             }
         }
     }
@@ -265,6 +278,7 @@ class HolidayAPI extends Endpoint implements CrudEndpoint
                 new ParamRule(self::FILTER_LOCATION_ID, new Rule(Rules::POSITIVE))
             ),
             new ParamRule(self::FILTER_ORG_WIDE_ONLY, new Rule(Rules::BOOL_VAL)),
+            new ParamRule(self::FILTER_INCLUDE_ORG_WIDE, new Rule(Rules::BOOL_VAL)),
             $this->getValidationDecorator()->notRequiredParamRule(
                 new ParamRule(self::FILTER_EMP_NUMBER, new Rule(Rules::POSITIVE))
             ),
