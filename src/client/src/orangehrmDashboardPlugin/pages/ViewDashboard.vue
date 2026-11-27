@@ -44,6 +44,12 @@
       <employees-on-leave-widget></employees-on-leave-widget>
     </oxd-grid-item>
     <oxd-grid-item
+      v-if="$can.read('dashboard_holiday_widget')"
+      class="orangehrm-dashboard-widget"
+    >
+      <upcoming-holidays-widget></upcoming-holidays-widget>
+    </oxd-grid-item>
+    <oxd-grid-item
       v-if="$can.read('dashboard_subunit_widget')"
       class="orangehrm-dashboard-widget"
     >
@@ -66,6 +72,7 @@ import EmployeeSubunitWidget from '@/orangehrmDashboardPlugin/components/Employe
 import MyActionSummaryWidget from '@/orangehrmDashboardPlugin/components/MyActionSummaryWidget.vue';
 import EmployeeLocationWidget from '@/orangehrmDashboardPlugin/components/EmployeeLocationWidget.vue';
 import EmployeesOnLeaveWidget from '@/orangehrmDashboardPlugin/components/EmployeesOnLeaveWidget.vue';
+import UpcomingHolidaysWidget from '@/orangehrmDashboardPlugin/components/UpcomingHolidaysWidget.vue';
 import EmployeeAttendanceWidget from '@/orangehrmDashboardPlugin/components/EmployeeAttendanceWidget.vue';
 
 export default {
@@ -76,6 +83,7 @@ export default {
     'my-action-summary-widget': MyActionSummaryWidget,
     'employee-location-widget': EmployeeLocationWidget,
     'employees-on-leave-widget': EmployeesOnLeaveWidget,
+    'upcoming-holidays-widget': UpcomingHolidaysWidget,
     'employee-attendance-widget': EmployeeAttendanceWidget,
   },
   mounted() {
