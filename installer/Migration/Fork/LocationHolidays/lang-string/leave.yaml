@@ -8,3 +8,6 @@ langStrings:
   -
     value: 'Every other location already has a holiday on this date. Add it as an all-locations holiday instead'
     unitId: holiday_all_locations
+  -
+    value: 'Org Wide Holidays'
+    unitId: org_wide_holidays

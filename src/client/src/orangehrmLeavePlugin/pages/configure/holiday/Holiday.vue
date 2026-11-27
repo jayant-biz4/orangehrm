@@ -149,7 +149,7 @@ export default {
     });
 
     const locationOptions = computed(() => [
-      {id: 0, label: t('leave.all_locations')},
+      {id: 0, label: t('leave.org_wide_holidays')},
       ...props.locations,
     ]);
 
