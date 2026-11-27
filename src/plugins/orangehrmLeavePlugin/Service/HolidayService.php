@@ -213,6 +213,15 @@ class HolidayService
     }
 
     /**
+     * @param int|null $empNumber null for a user with no employee record
+     * @return int|null
+     */
+    public function getLocationIdForUser(?int $empNumber): ?int
+    {
+        return $empNumber === null ? null : $this->getEmployeeLocationId($empNumber);
+    }
+
+    /**
      * @param DateTime $day
      * @param int|null $empNumber null means the global (location independent) lookup
      * @return Holiday|null

@@ -99,6 +99,14 @@ class HolidayServiceTest extends KernelTestCase
         $this->assertFalse($this->holidayService->isHoliday(new DateTime('2021-08-20'), 999));
     }
 
+    public function testGetLocationIdForUser(): void
+    {
+        TestDataService::populate($this->fixture);
+        $this->assertEquals(1, $this->holidayService->getLocationIdForUser(1));
+        $this->assertNull($this->holidayService->getLocationIdForUser(2));
+        $this->assertNull($this->holidayService->getLocationIdForUser(null));
+    }
+
     public function testIsHolidayWithoutEmployeeKeepsGlobalBehaviour(): void
     {
         TestDataService::populate($this->fixture);

@@ -312,6 +312,11 @@ list_holidays:
   controller: OrangeHRM\Leave\Controller\HolidayController::handle
   methods: [ GET ]
 
+leave_holiday_employee_list:
+  path: /leave/holidayList
+  controller: OrangeHRM\Leave\Controller\HolidayEmployeeListController::handle
+  methods: [ GET ]
+
 add_holiday:
   path: /leave/saveHolidays
   controller: OrangeHRM\Leave\Controller\SaveHolidayController::handle
